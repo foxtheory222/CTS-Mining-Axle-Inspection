@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:cts_mining_axle_inspection/core/mining_axle_template.dart';
 import 'package:cts_mining_axle_inspection/core/workspace_controller.dart';
 
 void main() {
@@ -13,7 +14,7 @@ void main() {
       controller.inspections.first,
     );
     expect(duplicate.documentNumber, isNot(equals(created.documentNumber)));
-    expect(duplicate.sections.length, 8);
+    expect(duplicate.sections.length, MiningAxleTemplate.sections.length);
 
     controller.setSearchQuery('North Basin');
     expect(controller.filteredInspections.length, 1);

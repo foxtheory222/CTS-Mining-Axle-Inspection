@@ -26,6 +26,8 @@ class InspectionBackupData {
     required this.documentNumber,
     required this.customer,
     required this.workOrderNumber,
+    this.axleSerialNumber = '',
+    this.machineSerialNumber = '',
     this.photoFiles = const <File>[],
     this.generatedPdfFile,
   });
@@ -34,6 +36,8 @@ class InspectionBackupData {
   final String documentNumber;
   final String customer;
   final String workOrderNumber;
+  final String axleSerialNumber;
+  final String machineSerialNumber;
   final List<File> photoFiles;
   final File? generatedPdfFile;
 }
@@ -96,7 +100,7 @@ class BackupService {
     final rootDirectory = await _buildExportDirectory();
     final fileName =
         archiveFileName ??
-        '${_safeFileStem('CTS_Fluid_Power_Inspection_Report_${data.documentNumber}_${data.customer}_${data.workOrderNumber}')}.ctsinspection.zip';
+        '${_safeFileStem('CTS_InspectionBundle_${data.documentNumber}_AXLE')}.zip';
     final archiveFile = File(p.join(rootDirectory.path, fileName));
     final archive = Archive();
     final warnings = <String>[];
@@ -142,8 +146,12 @@ class BackupService {
     final manifest = <String, dynamic>{
       'id': _uuid.v4(),
       'documentNumber': data.documentNumber,
+      'templateKey': data.inspectionJson['templateKey'],
+      'templateVersion': data.inspectionJson['templateVersion'],
       'customer': data.customer,
       'workOrderNumber': data.workOrderNumber,
+      'axleSerialNumber': data.axleSerialNumber,
+      'machineSerialNumber': data.machineSerialNumber,
       'exportedAt': DateTime.now().toUtc().toIso8601String(),
       'warnings': warnings,
     };
@@ -236,6 +244,7 @@ class BackupService {
       documentNumber =
           conflictResolver?.call(originalDocumentNumber) ??
           _generateImportedDocumentNumber(originalDocumentNumber);
+      inspectionJson['originalDocumentNumber'] = originalDocumentNumber;
       inspectionJson['documentNumber'] = documentNumber;
       documentNumberChanged = true;
       warnings.add(

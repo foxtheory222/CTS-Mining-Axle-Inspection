@@ -177,9 +177,12 @@ class _SpecTabletHarnessAppState extends State<SpecTabletHarnessApp> {
               _buildEditorActions(inspection),
               const SizedBox(height: 16),
               const Text(
-                'Job & Asset Identification',
+                'Inspection Purpose',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
+              const SizedBox(height: 8),
+              const Text('Visual Inspection'),
+              const Text('Overall Axle Health Assessment'),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 12,

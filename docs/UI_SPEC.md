@@ -20,11 +20,11 @@
 - Brand area with app title and logo.
 - New Inspection button.
 - Draft, In Progress, Complete, Emailed, and Critical summary cards.
-- Search by work order, customer, asset, technician, status, or document number.
+- Search by document number, customer, site, equipment model/serial, axle serial, inspector, status, or document number.
 - Recent inspections and duplicate shortcut.
 
 ### Inspection Editor
-- Fixed section navigation for all eight sections.
+- Fixed section navigation for all ten mining axle sections.
 - Persistent save state and completion state.
 - Required-field indicators and flagged-item markers.
 - Inline photo areas and comments.
@@ -51,14 +51,16 @@
 - The export bundle is a local restore package built from the inspection record, photos, and generated PDF.
 
 ## Section Layout
-1. Job & Asset Identification
-2. Component Tracking
-3. Fluid & Tank Service
-4. Hose & Connection Inspection
-5. Filtration & Breather Service
-6. Operational Data / System Test
-7. Follow-Up Repairs & Quoting
-8. Review & Completion
+1. Inspection Purpose
+2. Visual Inspection
+3. Lubrication Assessment
+4. Differential Inspection
+5. Planetary Hub Inspection
+6. Mechanical Measurements
+7. Temperature Assessment
+8. Condition Monitoring Findings
+9. Recommendations
+10. Overall Axle Health Assessment
 
 ## Interaction Rules
 - Keep navigation shallow and obvious.

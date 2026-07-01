@@ -81,8 +81,14 @@ class PdfService {
 
   static String buildReportFileName(InspectionReportData data) {
     final safeCustomer = _sanitizeFilePart(data.customer);
-    final safeWorkOrder = _sanitizeFilePart(data.workOrderNumber);
-    return 'CTS_Fluid_Power_Inspection_Report_${data.documentNumber}_${safeCustomer}_$safeWorkOrder.pdf';
+    final serial = data.axleSerialNumber.trim().isNotEmpty
+        ? data.axleSerialNumber
+        : data.machineSerialNumber;
+    final safeSerial = _sanitizeFilePart(serial);
+    final inspectionDate = DateFormat(
+      'yyyyMMdd',
+    ).format(data.inspectionDateTime);
+    return 'CTS_AXLE_${safeCustomer}_${safeSerial}_${inspectionDate}_${data.documentNumber}.pdf';
   }
 
   pw.Widget _buildCoverPage(InspectionReportData data, pw.ImageProvider? logo) {
@@ -145,6 +151,12 @@ class PdfService {
                   _kv('Work order', data.workOrderNumber),
                   _kv('Customer reference / PO', data.customerReference),
                   _kv('Asset / equipment', data.assetName),
+                  _kv('Equipment make', data.equipmentMake),
+                  _kv('Equipment model', data.equipmentModel),
+                  _kv('Machine serial no.', data.machineSerialNumber),
+                  _kv('Axle manufacturer', data.axleManufacturer),
+                  _kv('Axle model', data.axleModel),
+                  _kv('Axle serial number', data.axleSerialNumber),
                   _kv('Location / site', data.siteLocation),
                   _kv('Technician', data.technicianName),
                   _kv('Servicing shop', data.servicingShop),

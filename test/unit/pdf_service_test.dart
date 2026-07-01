@@ -28,6 +28,12 @@ void main() {
       workOrderNumber: 'WO-7788',
       customerReference: 'PO-4421',
       assetName: 'HPU-42 Main System',
+      equipmentMake: 'Caterpillar',
+      equipmentModel: '793F',
+      machineSerialNumber: 'MACH-42',
+      axleManufacturer: 'Dana',
+      axleModel: 'Spicer 53R300',
+      axleSerialNumber: 'AX-42',
       siteLocation: 'Edmonton Service Bay 3',
       technicianName: 'Alex Technician',
       servicingShop: 'CTS Edmonton',
@@ -166,7 +172,7 @@ void main() {
 
     expect(
       fileName,
-      'CTS_Fluid_Power_Inspection_Report_20260418-0001_North West Hydraulics Plant #1_WO-7788.pdf',
+      'CTS_AXLE_North West Hydraulics Plant #1_AX-42_20260418_20260418-0001.pdf',
     );
   });
 
@@ -180,10 +186,16 @@ void main() {
       final pdfText = latin1.decode(bytes);
 
       expect(bytes, isNotEmpty);
-      expect(pdfText, contains(PdfService.reportTitle));
+      expect(pdfText, contains('COMBINED'));
+      expect(pdfText, contains('MINING'));
+      expect(pdfText, contains('AXLE'));
+      expect(pdfText, contains('INSPECTION'));
+      expect(pdfText, contains('REPORT'));
       expect(pdfText, contains('Lockout/Tagout'));
       expect(pdfText, contains('WO-7788'));
       expect(pdfText, contains('PO-4421'));
+      expect(pdfText, contains('AX-42'));
+      expect(pdfText, contains('MACH-42'));
       expect(pdfText, contains('HPU-42'));
       expect(pdfText, contains('Private'));
       expect(pdfText, contains('confidential'));
@@ -228,7 +240,9 @@ void main() {
     expect(await file.length(), greaterThan(1000));
     expect(
       file.path,
-      contains('CTS_Fluid_Power_Inspection_Report_20260418-0001_'),
+      contains(
+        'CTS_AXLE_North West Hydraulics Plant #1_AX-42_20260418_20260418-0001.pdf',
+      ),
     );
   });
 }

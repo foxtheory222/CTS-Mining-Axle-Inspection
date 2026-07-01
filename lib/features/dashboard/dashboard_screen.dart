@@ -119,7 +119,7 @@ class _HeroBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Dashboard',
+                  'Mining Axle Dashboard',
                   style: Theme.of(context).textTheme.displaySmall?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
@@ -145,11 +145,13 @@ class _HeroBanner extends StatelessWidget {
                     ),
                     OutlinedButton.icon(
                       onPressed: onOpenInspections,
+                      style: _heroOutlinedButtonStyle(),
                       icon: const Icon(Icons.search),
                       label: const Text('Browse Inspections'),
                     ),
                     OutlinedButton.icon(
                       onPressed: onOpenActions,
+                      style: _heroOutlinedButtonStyle(),
                       icon: const Icon(Icons.assignment_turned_in_outlined),
                       label: const Text('Action Items'),
                     ),
@@ -196,6 +198,13 @@ class _HeroBanner extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  ButtonStyle _heroOutlinedButtonStyle() {
+    return OutlinedButton.styleFrom(
+      foregroundColor: Colors.white,
+      side: BorderSide(color: Colors.white.withValues(alpha: 0.9)),
     );
   }
 }

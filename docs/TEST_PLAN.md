@@ -56,7 +56,7 @@ Use a fix-test-fix loop:
 - Inspection with Unsatisfactory items.
 - Inspection with Critical / Out of Service items.
 - Inspection with many photos.
-- Inspection with hose replacement entries.
+- Inspection with abnormal axle findings and recommendations.
 - Exported and re-imported inspection.
 - Placeholder logo and sample media asset availability.
 
@@ -69,10 +69,10 @@ Use a fix-test-fix loop:
 6. Add a photo.
 7. Trigger an At Risk validation path.
 8. Trigger a Critical validation path and acknowledge lockout/tagout.
-9. Add a structured hose replacement entry.
-10. Capture the operational and follow-up information.
-11. Add final comments.
-12. Enter technician name and signature.
+9. Add a recommendation/action item.
+10. Capture mechanical measurements and temperature information.
+11. Add review notes.
+12. Enter CTS inspector name and signature.
 13. Complete the inspection.
 14. Generate the PDF.
 15. Open or share the PDF.

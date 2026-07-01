@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import 'constants.dart';
+import 'mining_axle_template.dart';
 import 'theme.dart';
 import '../data/models/inspection_enums.dart';
 import 'workspace_models.dart';
@@ -217,7 +217,7 @@ class AppWorkspaceController extends ChangeNotifier {
       customer: 'Moraine Quarry',
       workOrderNumber: 'WO-48912',
       customerReference: 'PO-55412',
-      assetName: 'HPU-12 Main Press',
+      assetName: 'CAT 793F Rear Axle AXLE-1001',
       siteLocation: 'East Pit Service Bay',
       technicianName: 'R. Ellis',
       servicingShop: 'CTS Edmonton Service',
@@ -232,28 +232,28 @@ class AppWorkspaceController extends ChangeNotifier {
       ),
       actionItems: [
         InspectionActionItemView(
-          title: 'Replace return hose at manifold',
+          title: 'Schedule hub seal replacement',
           description:
-              'Cracking near the fitting on hose H-12 was flagged during the inspection.',
+              'Light seepage was noted at the left planetary hub seal during the inspection.',
           conditionRating: ConditionRating.unsatisfactory,
-          sourceSection: 'Hose & Connection Inspection',
-          sourceItem: 'Hose replacement entry',
-          partsRequired: 'Hose assembly, two JIC fittings, crimp sleeves',
+          sourceSection: 'Planetary Hub Inspection',
+          sourceItem: 'Hub Seals',
+          partsRequired: 'Hub seal kit and axle oil top-up',
         ),
       ],
       photos: [
         InspectionPhotoView(
           assetPath: 'assets/demo/sample_photo_1.jpg',
-          caption: 'As-found unit overview',
-          sectionTitle: 'Job & Asset Identification',
-          itemLabel: 'HPU wide shot',
+          caption: 'As-found axle overview',
+          sectionTitle: 'Visual Inspection',
+          itemLabel: 'Axle Housing',
           capturedAt: DateTime(2026, 4, 20, 8, 45),
         ),
         InspectionPhotoView(
           assetPath: 'assets/demo/sample_photo_2.jpg',
-          caption: 'Tank nameplate close-up',
-          sectionTitle: 'Component Tracking',
-          itemLabel: 'Main Pump',
+          caption: 'Planetary hub evidence',
+          sectionTitle: 'Planetary Hub Inspection',
+          itemLabel: 'Wheel Bearings',
           capturedAt: DateTime(2026, 4, 20, 9, 10),
         ),
       ],
@@ -265,9 +265,9 @@ class AppWorkspaceController extends ChangeNotifier {
       lastUpdatedAt: today.add(const Duration(minutes: 32)),
       completedAt: today.add(const Duration(hours: 1, minutes: 14)),
       finalTechComments:
-          'Unit operating within service limits after hose replacement planning.',
+          'Axle operating within service limits with hub seal replacement planned.',
       generatedPdfPath:
-          '/storage/emulated/0/Download/CTS_Fluid_Power_Inspection_Report_20260420-0001.pdf',
+          '/storage/emulated/0/Download/CTS_AXLE_Moraine_Quarry_AXLE-1001_20260420_20260420-0001.pdf',
     );
 
     final inspection2 = InspectionSummary(
@@ -276,8 +276,8 @@ class AppWorkspaceController extends ChangeNotifier {
       customer: 'North Basin Processing',
       workOrderNumber: 'WO-48921',
       customerReference: 'JOB-7745',
-      assetName: 'Transfer Pump Skid 04',
-      siteLocation: 'North Tank Farm',
+      assetName: 'Komatsu 830E Front Axle AXLE-2002',
+      siteLocation: 'North Pit Maintenance Pad',
       technicianName: 'K. Morgan',
       servicingShop: 'CTS Calgary Service',
       inspectionDateTime: today.add(const Duration(hours: 2)),
@@ -293,35 +293,35 @@ class AppWorkspaceController extends ChangeNotifier {
         InspectionActionItemView(
           title: 'Lockout/Tagout before restart',
           description:
-              'Critical tank integrity issue requires isolation until corrective work is complete.',
+              'Critical axle housing crack requires isolation until corrective work is complete.',
           conditionRating: ConditionRating.criticalOutOfService,
-          sourceSection: 'Fluid & Tank Service',
-          sourceItem: 'Tank integrity',
-          partsRequired: 'Tank repair kit, lockout hardware',
+          sourceSection: 'Visual Inspection',
+          sourceItem: 'Axle Housing',
+          partsRequired: 'Housing repair plan and lockout hardware',
         ),
         InspectionActionItemView(
-          title: 'Replace breather element',
+          title: 'Replace contaminated breather',
           description:
-              'Breather housing contamination noted; element replacement recommended.',
+              'Breather contamination noted; replacement recommended before return to service.',
           conditionRating: ConditionRating.monitorAtRisk,
-          sourceSection: 'Filtration & Breather Service',
-          sourceItem: 'Breather replaced?',
-          partsRequired: 'Breather element 12-7781',
+          sourceSection: 'Visual Inspection',
+          sourceItem: 'Breathers',
+          partsRequired: 'Axle breather element 12-7781',
         ),
       ],
       photos: [
         InspectionPhotoView(
           assetPath: 'assets/demo/sample_photo_1.jpg',
-          caption: 'Critical tank corrosion',
-          sectionTitle: 'Fluid & Tank Service',
-          itemLabel: 'Tank integrity',
+          caption: 'Critical housing crack',
+          sectionTitle: 'Visual Inspection',
+          itemLabel: 'Axle Housing',
           capturedAt: DateTime(2026, 4, 20, 10, 12),
         ),
         InspectionPhotoView(
           assetPath: 'assets/demo/sample_photo_2.jpg',
-          caption: 'Gauges under load',
-          sectionTitle: 'Operational Data / System Test',
-          itemLabel: 'System test',
+          caption: 'Oil sample evidence',
+          sectionTitle: 'Lubrication Assessment',
+          itemLabel: 'Oil Condition',
           capturedAt: DateTime(2026, 4, 20, 10, 18),
         ),
       ],
@@ -335,7 +335,7 @@ class AppWorkspaceController extends ChangeNotifier {
       emailedAt: today.add(const Duration(hours: 3, minutes: 42)),
       criticalAcknowledged: true,
       generatedPdfPath:
-          '/storage/emulated/0/Download/CTS_Fluid_Power_Inspection_Report_20260420-0002.pdf',
+          '/storage/emulated/0/Download/CTS_AXLE_North_Basin_Processing_AXLE-2002_20260420_20260420-0002.pdf',
     );
 
     final inspection3 = InspectionSummary(
@@ -344,7 +344,7 @@ class AppWorkspaceController extends ChangeNotifier {
       customer: 'Prairie Rail Services',
       workOrderNumber: 'WO-48888',
       customerReference: 'PR-1182',
-      assetName: 'Hydraulic Lift Cart 2',
+      assetName: 'CAT 777G Rear Axle AXLE-3003',
       siteLocation: 'Maintenance Yard',
       technicianName: 'T. Singh',
       servicingShop: 'CTS Red Deer Service',
@@ -361,9 +361,9 @@ class AppWorkspaceController extends ChangeNotifier {
       photos: [
         InspectionPhotoView(
           assetPath: 'assets/demo/sample_photo_1.jpg',
-          caption: 'Asset identification photo',
-          sectionTitle: 'Job & Asset Identification',
-          itemLabel: 'HPU wide shot',
+          caption: 'Axle identification photo',
+          sectionTitle: 'Inspection Purpose',
+          itemLabel: 'Axle serial plate',
           capturedAt: DateTime(2026, 4, 19, 15, 01),
         ),
       ],
@@ -386,85 +386,98 @@ class AppWorkspaceController extends ChangeNotifier {
   }) {
     return [
       InspectionSectionView(
-        key: InspectionSectionKeys.jobAssetIdentification,
-        title:
-            inspectionSectionTitles[InspectionSectionKeys
-                .jobAssetIdentification]!,
+        key: MiningAxleTemplate.inspectionPurpose,
+        title: 'Inspection Purpose',
         completionState: SectionCompletionState.complete,
-        summary: 'Header complete and photos captured.',
-        photoCount: photoCount > 0 ? 2 : 0,
+        summary: 'Purpose and header details captured.',
+        photoCount: 0,
       ),
       InspectionSectionView(
-        key: InspectionSectionKeys.componentTracking,
-        title:
-            inspectionSectionTitles[InspectionSectionKeys.componentTracking]!,
+        key: MiningAxleTemplate.visualInspection,
+        title: 'Visual Inspection',
         completionState: SectionCompletionState.complete,
-        summary: 'Nameplates and component notes captured.',
+        summary: 'Axle housing, wheel ends, breathers, and fasteners checked.',
         photoCount: photoCount > 1 ? 2 : 0,
+        flaggedCount: atRisk + unsat + critical,
+        criticalWarning: critical > 0,
       ),
       InspectionSectionView(
-        key: InspectionSectionKeys.fluidTankService,
-        title: inspectionSectionTitles[InspectionSectionKeys.fluidTankService]!,
+        key: MiningAxleTemplate.lubricationAssessment,
+        title: 'Lubrication Assessment',
         completionState: critical > 0
             ? SectionCompletionState.blocked
             : atRisk > 0 || unsat > 0
             ? SectionCompletionState.inProgress
             : SectionCompletionState.complete,
         summary: critical > 0
-            ? 'Critical tank warning acknowledged.'
+            ? 'Critical lubrication-related warning acknowledged.'
             : atRisk > 0 || unsat > 0
-            ? 'Flagged fluid service items need follow-up.'
-            : 'Fluid condition is within tolerance.',
+            ? 'Flagged lubrication findings need follow-up.'
+            : 'Oil level and condition are within tolerance.',
         photoCount: photoCount > 2 ? 1 : 0,
+        flaggedCount: atRisk,
+        criticalWarning: critical > 0,
+      ),
+      InspectionSectionView(
+        key: MiningAxleTemplate.differentialInspection,
+        title: 'Differential Inspection',
+        completionState: atRisk > 0 || unsat > 0
+            ? SectionCompletionState.inProgress
+            : SectionCompletionState.complete,
+        summary: 'Crown wheel, pinion, bearings, backlash, and lock reviewed.',
+        photoCount: photoCount > 3 ? 1 : 0,
+        flaggedCount: unsat > 0 ? 1 : 0,
+      ),
+      InspectionSectionView(
+        key: MiningAxleTemplate.planetaryHubInspection,
+        title: 'Planetary Hub Inspection',
+        completionState: atRisk > 0
+            ? SectionCompletionState.inProgress
+            : SectionCompletionState.complete,
+        summary: 'Sun gears, planet gears, seals, and wheel bearings checked.',
+        photoCount: photoCount > 4 ? 1 : 0,
+        flaggedCount: atRisk > 0 ? 1 : 0,
+      ),
+      InspectionSectionView(
+        key: MiningAxleTemplate.mechanicalMeasurementsSection,
+        title: 'Mechanical Measurements',
+        completionState: SectionCompletionState.complete,
+        summary: 'Backlash, preload, end float, and runout values stored.',
+        photoCount: photoCount > 5 ? 1 : 0,
+      ),
+      InspectionSectionView(
+        key: MiningAxleTemplate.temperatureAssessment,
+        title: 'Temperature Assessment',
+        completionState: atRisk > 0
+            ? SectionCompletionState.inProgress
+            : SectionCompletionState.complete,
+        summary: 'Infrared thermography readings captured.',
+        photoCount: photoCount > 6 ? 1 : 0,
+      ),
+      InspectionSectionView(
+        key: MiningAxleTemplate.conditionMonitoringFindingsSection,
+        title: 'Condition Monitoring Findings',
+        completionState: atRisk > 0 || unsat > 0 || critical > 0
+            ? SectionCompletionState.inProgress
+            : SectionCompletionState.complete,
+        summary: 'Abnormal findings and supporting details reviewed.',
+        photoCount: 0,
         flaggedCount: atRisk + unsat + critical,
         criticalWarning: critical > 0,
       ),
       InspectionSectionView(
-        key: InspectionSectionKeys.hoseConnectionInspection,
-        title:
-            inspectionSectionTitles[InspectionSectionKeys
-                .hoseConnectionInspection]!,
-        completionState: atRisk > 0 || unsat > 0
+        key: MiningAxleTemplate.recommendations,
+        title: 'Recommendations',
+        completionState: atRisk > 0 || unsat > 0 || critical > 0
             ? SectionCompletionState.inProgress
             : SectionCompletionState.complete,
-        summary: 'Hose replacement entries and fitting notes documented.',
-        photoCount: photoCount > 3 ? 1 : 0,
-        flaggedCount: atRisk > 0 ? 1 : 0,
+        summary: 'Priority actions and monitoring recommendations tracked.',
+        photoCount: 0,
+        flaggedCount: atRisk + unsat + critical,
       ),
       InspectionSectionView(
-        key: InspectionSectionKeys.filtrationBreatherService,
-        title:
-            inspectionSectionTitles[InspectionSectionKeys
-                .filtrationBreatherService]!,
-        completionState: atRisk > 0
-            ? SectionCompletionState.inProgress
-            : SectionCompletionState.complete,
-        summary: 'Filter replacement statuses captured.',
-        photoCount: photoCount > 4 ? 1 : 0,
-      ),
-      InspectionSectionView(
-        key: InspectionSectionKeys.operationalDataSystemTest,
-        title:
-            inspectionSectionTitles[InspectionSectionKeys
-                .operationalDataSystemTest]!,
-        completionState: SectionCompletionState.complete,
-        summary: 'System test readings stored.',
-        photoCount: photoCount > 5 ? 1 : 0,
-      ),
-      InspectionSectionView(
-        key: InspectionSectionKeys.followUpRepairsQuoting,
-        title:
-            inspectionSectionTitles[InspectionSectionKeys
-                .followUpRepairsQuoting]!,
-        completionState: atRisk > 0
-            ? SectionCompletionState.inProgress
-            : SectionCompletionState.complete,
-        summary: 'Quoted parts and follow-up actions are tracked.',
-        photoCount: photoCount > 6 ? 1 : 0,
-      ),
-      InspectionSectionView(
-        key: InspectionSectionKeys.reviewCompletion,
-        title: inspectionSectionTitles[InspectionSectionKeys.reviewCompletion]!,
+        key: MiningAxleTemplate.overallHealth,
+        title: 'Overall Axle Health Assessment',
         completionState: atRisk > 0 || unsat > 0 || critical > 0
             ? SectionCompletionState.blocked
             : SectionCompletionState.complete,

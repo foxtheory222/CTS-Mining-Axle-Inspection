@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/constants.dart';
+import '../../core/mining_axle_template.dart';
 import '../../core/validators.dart';
 import '../../services/document_number_service.dart';
 import '../database/app_database.dart';
@@ -40,6 +41,16 @@ class InspectionRepository {
       customerReference: duplicateSource?.customerReference ?? '',
       assetName: duplicateSource?.assetName ?? '',
       hpuAssetIdName: duplicateSource?.hpuAssetIdName ?? '',
+      equipmentMake: duplicateSource?.equipmentMake ?? '',
+      equipmentModel: duplicateSource?.equipmentModel ?? '',
+      machineSerialNumber: duplicateSource?.machineSerialNumber ?? '',
+      axleManufacturer: duplicateSource?.axleManufacturer ?? '',
+      axleModel: duplicateSource?.axleModel ?? '',
+      axleSerialNumber: duplicateSource?.axleSerialNumber ?? '',
+      hoursOnMachine: duplicateSource?.hoursOnMachine ?? '',
+      purchaseOrderNumber: duplicateSource?.purchaseOrderNumber ?? '',
+      relatedMachineReportDocumentNumber:
+          duplicateSource?.relatedMachineReportDocumentNumber ?? '',
       siteLocation: duplicateSource?.siteLocation ?? '',
       technicianName: duplicateSource?.technicianName ?? '',
       servicingShop: duplicateSource?.servicingShop ?? '',
@@ -104,6 +115,12 @@ class InspectionRepository {
       'customer_reference': inspection.customerReference,
       'site_location': inspection.siteLocation,
       'servicing_shop': inspection.servicingShop,
+      'equipment_make': inspection.equipmentMake,
+      'equipment_model': inspection.equipmentModel,
+      'machine_serial_number': inspection.machineSerialNumber,
+      'axle_manufacturer': inspection.axleManufacturer,
+      'axle_model': inspection.axleModel,
+      'axle_serial_number': inspection.axleSerialNumber,
       'inspection_date_time': inspection.inspectionDateTime.toIso8601String(),
       'created_at': inspection.createdAt.toIso8601String(),
       'updated_at': inspection.updatedAt.toIso8601String(),
@@ -166,9 +183,26 @@ class InspectionRepository {
       whereBuffer.write(
         ' AND (LOWER(work_order_number) LIKE ? OR LOWER(customer) LIKE ? OR '
         'LOWER(asset_name) LIKE ? OR LOWER(document_number) LIKE ? OR '
-        'LOWER(technician_name) LIKE ?)',
+        'LOWER(technician_name) LIKE ? OR LOWER(site_location) LIKE ? OR '
+        'LOWER(equipment_make) LIKE ? OR LOWER(equipment_model) LIKE ? OR '
+        'LOWER(machine_serial_number) LIKE ? OR '
+        'LOWER(axle_manufacturer) LIKE ? OR LOWER(axle_model) LIKE ? OR '
+        'LOWER(axle_serial_number) LIKE ?)',
       );
-      args.addAll(<Object?>[like, like, like, like, like]);
+      args.addAll(<Object?>[
+        like,
+        like,
+        like,
+        like,
+        like,
+        like,
+        like,
+        like,
+        like,
+        like,
+        like,
+        like,
+      ]);
     }
 
     if (query.status != null) {
@@ -319,9 +353,9 @@ class InspectionRepository {
   }
 
   List<InspectionSectionProgress> _defaultSections(String inspectionId) {
-    return InspectionSectionKeys.ordered
+    return MiningAxleTemplate.sections
         .map(
-          (SectionDescriptor descriptor) => InspectionSectionProgress(
+          (MiningAxleSection descriptor) => InspectionSectionProgress(
             id: '${inspectionId}_${descriptor.key}',
             inspectionId: inspectionId,
             sectionKey: descriptor.key,

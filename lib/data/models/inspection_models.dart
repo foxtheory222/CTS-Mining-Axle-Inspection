@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../core/constants.dart';
 import 'inspection_enums.dart';
 
 typedef JsonMap = Map<String, dynamic>;
@@ -444,6 +445,123 @@ class RequiredItemEntry {
   }
 }
 
+class OilAnalysisRow {
+  OilAnalysisRow({required this.parameter, this.result = '', this.limits = ''});
+
+  String parameter;
+  String result;
+  String limits;
+
+  factory OilAnalysisRow.fromJson(JsonMap json) {
+    return OilAnalysisRow(
+      parameter: json['parameter'] as String,
+      result: json['result'] as String? ?? '',
+      limits: json['limits'] as String? ?? '',
+    );
+  }
+
+  JsonMap toJson() {
+    return <String, dynamic>{
+      'parameter': parameter,
+      'result': result,
+      'limits': limits,
+    };
+  }
+}
+
+class MechanicalMeasurementRow {
+  MechanicalMeasurementRow({
+    required this.measurement,
+    this.specification = '',
+    this.actual = '',
+    this.comments = '',
+    this.performedStatus = '',
+    this.flaggedOutOfSpec = false,
+  });
+
+  String measurement;
+  String specification;
+  String actual;
+  String comments;
+  String performedStatus;
+  bool flaggedOutOfSpec;
+
+  factory MechanicalMeasurementRow.fromJson(JsonMap json) {
+    return MechanicalMeasurementRow(
+      measurement: json['measurement'] as String,
+      specification: json['specification'] as String? ?? '',
+      actual: json['actual'] as String? ?? '',
+      comments: json['comments'] as String? ?? '',
+      performedStatus: json['performedStatus'] as String? ?? '',
+      flaggedOutOfSpec: json['flaggedOutOfSpec'] as bool? ?? false,
+    );
+  }
+
+  JsonMap toJson() {
+    return <String, dynamic>{
+      'measurement': measurement,
+      'specification': specification,
+      'actual': actual,
+      'comments': comments,
+      'performedStatus': performedStatus,
+      'flaggedOutOfSpec': flaggedOutOfSpec,
+    };
+  }
+}
+
+class TemperatureRow {
+  TemperatureRow({
+    required this.location,
+    this.temperatureC,
+    this.comments = '',
+    this.abnormalFlagged = false,
+  });
+
+  String location;
+  double? temperatureC;
+  String comments;
+  bool abnormalFlagged;
+
+  factory TemperatureRow.fromJson(JsonMap json) {
+    return TemperatureRow(
+      location: json['location'] as String,
+      temperatureC: (json['temperatureC'] as num?)?.toDouble(),
+      comments: json['comments'] as String? ?? '',
+      abnormalFlagged: json['abnormalFlagged'] as bool? ?? false,
+    );
+  }
+
+  JsonMap toJson() {
+    return <String, dynamic>{
+      'location': location,
+      'temperatureC': temperatureC,
+      'comments': comments,
+      'abnormalFlagged': abnormalFlagged,
+    };
+  }
+}
+
+class RecommendationRow {
+  RecommendationRow({required this.priority, this.recommendation = ''});
+
+  String priority;
+  String recommendation;
+
+  factory RecommendationRow.fromJson(JsonMap json) {
+    return RecommendationRow(
+      priority: json['priority'] as String,
+      recommendation: json['recommendation'] as String? ?? '',
+    );
+  }
+
+  JsonMap toJson() {
+    return <String, dynamic>{
+      'priority': priority,
+      'recommendation': recommendation,
+    };
+  }
+}
+
 class EmailRecipientEntry {
   EmailRecipientEntry({
     required this.id,
@@ -521,11 +639,23 @@ class InspectionRecord {
     required this.id,
     required this.documentNumber,
     required this.status,
+    this.templateKey = AppConstants.templateKey,
+    this.templateVersion = AppConstants.templateVersion,
+    this.appName = AppConstants.appName,
     this.customer = '',
     this.workOrderNumber = '',
     this.customerReference = '',
     this.assetName = '',
     this.hpuAssetIdName = '',
+    this.equipmentMake = '',
+    this.equipmentModel = '',
+    this.machineSerialNumber = '',
+    this.axleManufacturer = '',
+    this.axleModel = '',
+    this.axleSerialNumber = '',
+    this.hoursOnMachine = '',
+    this.purchaseOrderNumber = '',
+    this.relatedMachineReportDocumentNumber = '',
     this.siteLocation = '',
     this.technicianName = '',
     this.servicingShop = '',
@@ -536,26 +666,78 @@ class InspectionRecord {
     this.emailedAt,
     this.finalTechComments = '',
     this.signatureFilePath,
+    this.customerRepresentativeName = '',
+    this.customerSignatureFilePath,
+    this.customerSignatureDate,
+    this.customerUnavailableNote = '',
     this.criticalAcknowledged = false,
     this.generatedPdfPath,
-    this.sections = const <InspectionSectionProgress>[],
-    this.responses = const <InspectionResponse>[],
-    this.photos = const <InspectionPhoto>[],
-    this.actionItems = const <ActionItem>[],
-    this.hoseEntries = const <HoseEntry>[],
-    this.componentEntries = const <ComponentEntry>[],
-    this.filterEntries = const <FilterEntry>[],
-    this.requiredItems = const <RequiredItemEntry>[],
-  });
+    this.restoredFromExportPath,
+    List<InspectionSectionProgress> sections =
+        const <InspectionSectionProgress>[],
+    List<InspectionResponse> responses = const <InspectionResponse>[],
+    List<InspectionPhoto> photos = const <InspectionPhoto>[],
+    List<ActionItem> actionItems = const <ActionItem>[],
+    List<HoseEntry> hoseEntries = const <HoseEntry>[],
+    List<ComponentEntry> componentEntries = const <ComponentEntry>[],
+    List<FilterEntry> filterEntries = const <FilterEntry>[],
+    List<RequiredItemEntry> requiredItems = const <RequiredItemEntry>[],
+    List<OilAnalysisRow> oilAnalysisRows = const <OilAnalysisRow>[],
+    List<MechanicalMeasurementRow> mechanicalMeasurementRows =
+        const <MechanicalMeasurementRow>[],
+    List<TemperatureRow> temperatureRows = const <TemperatureRow>[],
+    List<RecommendationRow> recommendationRows = const <RecommendationRow>[],
+  }) : sections = List<InspectionSectionProgress>.of(sections, growable: true),
+       responses = List<InspectionResponse>.of(responses, growable: true),
+       photos = List<InspectionPhoto>.of(photos, growable: true),
+       actionItems = List<ActionItem>.of(actionItems, growable: true),
+       hoseEntries = List<HoseEntry>.of(hoseEntries, growable: true),
+       componentEntries = List<ComponentEntry>.of(
+         componentEntries,
+         growable: true,
+       ),
+       filterEntries = List<FilterEntry>.of(filterEntries, growable: true),
+       requiredItems = List<RequiredItemEntry>.of(
+         requiredItems,
+         growable: true,
+       ),
+       oilAnalysisRows = List<OilAnalysisRow>.of(
+         oilAnalysisRows,
+         growable: true,
+       ),
+       mechanicalMeasurementRows = List<MechanicalMeasurementRow>.of(
+         mechanicalMeasurementRows,
+         growable: true,
+       ),
+       temperatureRows = List<TemperatureRow>.of(
+         temperatureRows,
+         growable: true,
+       ),
+       recommendationRows = List<RecommendationRow>.of(
+         recommendationRows,
+         growable: true,
+       );
 
   final String id;
   String documentNumber;
   InspectionStatus status;
+  String templateKey;
+  String templateVersion;
+  String appName;
   String customer;
   String workOrderNumber;
   String customerReference;
   String assetName;
   String hpuAssetIdName;
+  String equipmentMake;
+  String equipmentModel;
+  String machineSerialNumber;
+  String axleManufacturer;
+  String axleModel;
+  String axleSerialNumber;
+  String hoursOnMachine;
+  String purchaseOrderNumber;
+  String relatedMachineReportDocumentNumber;
   String siteLocation;
   String technicianName;
   String servicingShop;
@@ -566,8 +748,13 @@ class InspectionRecord {
   DateTime? emailedAt;
   String finalTechComments;
   String? signatureFilePath;
+  String customerRepresentativeName;
+  String? customerSignatureFilePath;
+  DateTime? customerSignatureDate;
+  String customerUnavailableNote;
   bool criticalAcknowledged;
   String? generatedPdfPath;
+  String? restoredFromExportPath;
   List<InspectionSectionProgress> sections;
   List<InspectionResponse> responses;
   List<InspectionPhoto> photos;
@@ -576,17 +763,35 @@ class InspectionRecord {
   List<ComponentEntry> componentEntries;
   List<FilterEntry> filterEntries;
   List<RequiredItemEntry> requiredItems;
+  List<OilAnalysisRow> oilAnalysisRows;
+  List<MechanicalMeasurementRow> mechanicalMeasurementRows;
+  List<TemperatureRow> temperatureRows;
+  List<RecommendationRow> recommendationRows;
 
   factory InspectionRecord.fromJson(JsonMap json) {
     return InspectionRecord(
       id: json['id'] as String,
       documentNumber: json['documentNumber'] as String,
       status: InspectionStatusX.fromValue(json['status'] as String? ?? 'draft'),
+      templateKey: json['templateKey'] as String? ?? AppConstants.templateKey,
+      templateVersion:
+          json['templateVersion'] as String? ?? AppConstants.templateVersion,
+      appName: json['appName'] as String? ?? AppConstants.appName,
       customer: json['customer'] as String? ?? '',
       workOrderNumber: json['workOrderNumber'] as String? ?? '',
       customerReference: json['customerReference'] as String? ?? '',
       assetName: json['assetName'] as String? ?? '',
       hpuAssetIdName: json['hpuAssetIdName'] as String? ?? '',
+      equipmentMake: json['equipmentMake'] as String? ?? '',
+      equipmentModel: json['equipmentModel'] as String? ?? '',
+      machineSerialNumber: json['machineSerialNumber'] as String? ?? '',
+      axleManufacturer: json['axleManufacturer'] as String? ?? '',
+      axleModel: json['axleModel'] as String? ?? '',
+      axleSerialNumber: json['axleSerialNumber'] as String? ?? '',
+      hoursOnMachine: json['hoursOnMachine'] as String? ?? '',
+      purchaseOrderNumber: json['purchaseOrderNumber'] as String? ?? '',
+      relatedMachineReportDocumentNumber:
+          json['relatedMachineReportDocumentNumber'] as String? ?? '',
       siteLocation: json['siteLocation'] as String? ?? '',
       technicianName: json['technicianName'] as String? ?? '',
       servicingShop: json['servicingShop'] as String? ?? '',
@@ -603,8 +808,16 @@ class InspectionRecord {
           : DateTime.parse(json['emailedAt'] as String).toLocal(),
       finalTechComments: json['finalTechComments'] as String? ?? '',
       signatureFilePath: json['signatureFilePath'] as String?,
+      customerRepresentativeName:
+          json['customerRepresentativeName'] as String? ?? '',
+      customerSignatureFilePath: json['customerSignatureFilePath'] as String?,
+      customerSignatureDate: json['customerSignatureDate'] == null
+          ? null
+          : DateTime.parse(json['customerSignatureDate'] as String).toLocal(),
+      customerUnavailableNote: json['customerUnavailableNote'] as String? ?? '',
       criticalAcknowledged: json['criticalAcknowledged'] as bool? ?? false,
       generatedPdfPath: json['generatedPdfPath'] as String?,
+      restoredFromExportPath: json['restoredFromExportPath'] as String?,
       sections: (json['sections'] as List<dynamic>? ?? <dynamic>[])
           .map(
             (dynamic item) =>
@@ -633,6 +846,27 @@ class InspectionRecord {
       requiredItems: (json['requiredItems'] as List<dynamic>? ?? <dynamic>[])
           .map((dynamic item) => RequiredItemEntry.fromJson(item as JsonMap))
           .toList(growable: true),
+      oilAnalysisRows:
+          (json['oilAnalysisRows'] as List<dynamic>? ?? <dynamic>[])
+              .map((dynamic item) => OilAnalysisRow.fromJson(item as JsonMap))
+              .toList(growable: true),
+      mechanicalMeasurementRows:
+          (json['mechanicalMeasurementRows'] as List<dynamic>? ?? <dynamic>[])
+              .map(
+                (dynamic item) =>
+                    MechanicalMeasurementRow.fromJson(item as JsonMap),
+              )
+              .toList(growable: true),
+      temperatureRows:
+          (json['temperatureRows'] as List<dynamic>? ?? <dynamic>[])
+              .map((dynamic item) => TemperatureRow.fromJson(item as JsonMap))
+              .toList(growable: true),
+      recommendationRows:
+          (json['recommendationRows'] as List<dynamic>? ?? <dynamic>[])
+              .map(
+                (dynamic item) => RecommendationRow.fromJson(item as JsonMap),
+              )
+              .toList(growable: true),
     );
   }
 
@@ -645,11 +879,23 @@ class InspectionRecord {
       'id': id,
       'documentNumber': documentNumber,
       'status': status.value,
+      'templateKey': templateKey,
+      'templateVersion': templateVersion,
+      'appName': appName,
       'customer': customer,
       'workOrderNumber': workOrderNumber,
       'customerReference': customerReference,
       'assetName': assetName,
       'hpuAssetIdName': hpuAssetIdName,
+      'equipmentMake': equipmentMake,
+      'equipmentModel': equipmentModel,
+      'machineSerialNumber': machineSerialNumber,
+      'axleManufacturer': axleManufacturer,
+      'axleModel': axleModel,
+      'axleSerialNumber': axleSerialNumber,
+      'hoursOnMachine': hoursOnMachine,
+      'purchaseOrderNumber': purchaseOrderNumber,
+      'relatedMachineReportDocumentNumber': relatedMachineReportDocumentNumber,
       'siteLocation': siteLocation,
       'technicianName': technicianName,
       'servicingShop': servicingShop,
@@ -660,8 +906,13 @@ class InspectionRecord {
       'emailedAt': emailedAt?.toIso8601String(),
       'finalTechComments': finalTechComments,
       'signatureFilePath': signatureFilePath,
+      'customerRepresentativeName': customerRepresentativeName,
+      'customerSignatureFilePath': customerSignatureFilePath,
+      'customerSignatureDate': customerSignatureDate?.toIso8601String(),
+      'customerUnavailableNote': customerUnavailableNote,
       'criticalAcknowledged': criticalAcknowledged,
       'generatedPdfPath': generatedPdfPath,
+      'restoredFromExportPath': restoredFromExportPath,
       'sections': sections
           .map((InspectionSectionProgress item) => item.toJson())
           .toList(),
@@ -683,6 +934,18 @@ class InspectionRecord {
           .toList(),
       'requiredItems': requiredItems
           .map((RequiredItemEntry item) => item.toJson())
+          .toList(),
+      'oilAnalysisRows': oilAnalysisRows
+          .map((OilAnalysisRow item) => item.toJson())
+          .toList(),
+      'mechanicalMeasurementRows': mechanicalMeasurementRows
+          .map((MechanicalMeasurementRow item) => item.toJson())
+          .toList(),
+      'temperatureRows': temperatureRows
+          .map((TemperatureRow item) => item.toJson())
+          .toList(),
+      'recommendationRows': recommendationRows
+          .map((RecommendationRow item) => item.toJson())
           .toList(),
     };
   }

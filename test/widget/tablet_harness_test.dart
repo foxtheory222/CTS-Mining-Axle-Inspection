@@ -23,7 +23,9 @@ void main() {
       await tester.tap(find.byKey(const Key('new_inspection_button')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Job & Asset Identification'), findsOneWidget);
+      expect(find.text('Inspection Purpose'), findsOneWidget);
+      expect(find.text('Visual Inspection'), findsOneWidget);
+      expect(find.text('Overall Axle Health Assessment'), findsOneWidget);
       expect(find.text('Review Summary'), findsOneWidget);
       expect(find.byType(NavigationRail), findsOneWidget);
 

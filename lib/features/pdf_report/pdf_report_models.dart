@@ -154,6 +154,12 @@ class InspectionReportData {
     required this.workOrderNumber,
     required this.customerReference,
     required this.assetName,
+    this.equipmentMake = '',
+    this.equipmentModel = '',
+    this.machineSerialNumber = '',
+    this.axleManufacturer = '',
+    this.axleModel = '',
+    this.axleSerialNumber = '',
     required this.siteLocation,
     required this.technicianName,
     required this.servicingShop,
@@ -175,6 +181,12 @@ class InspectionReportData {
   final String workOrderNumber;
   final String customerReference;
   final String assetName;
+  final String equipmentMake;
+  final String equipmentModel;
+  final String machineSerialNumber;
+  final String axleManufacturer;
+  final String axleModel;
+  final String axleSerialNumber;
   final String siteLocation;
   final String technicianName;
   final String servicingShop;

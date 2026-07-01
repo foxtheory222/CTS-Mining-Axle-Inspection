@@ -37,6 +37,12 @@ class AppDatabase {
             customer_reference TEXT NOT NULL,
             site_location TEXT NOT NULL,
             servicing_shop TEXT NOT NULL,
+            equipment_make TEXT NOT NULL DEFAULT '',
+            equipment_model TEXT NOT NULL DEFAULT '',
+            machine_serial_number TEXT NOT NULL DEFAULT '',
+            axle_manufacturer TEXT NOT NULL DEFAULT '',
+            axle_model TEXT NOT NULL DEFAULT '',
+            axle_serial_number TEXT NOT NULL DEFAULT '',
             inspection_date_time TEXT NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
@@ -88,6 +94,15 @@ class AppDatabase {
         );
         await db.execute(
           'CREATE INDEX idx_inspections_technician_name ON inspections(technician_name)',
+        );
+        await db.execute(
+          'CREATE INDEX idx_inspections_equipment_model ON inspections(equipment_model)',
+        );
+        await db.execute(
+          'CREATE INDEX idx_inspections_machine_serial_number ON inspections(machine_serial_number)',
+        );
+        await db.execute(
+          'CREATE INDEX idx_inspections_axle_serial_number ON inspections(axle_serial_number)',
         );
         await db.execute(
           'CREATE INDEX idx_inspections_inspection_date_time ON inspections(inspection_date_time)',

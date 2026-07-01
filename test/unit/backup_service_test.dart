@@ -28,12 +28,16 @@ void main() {
       data: InspectionBackupData(
         inspectionJson: <String, dynamic>{
           'documentNumber': '20260420-0001',
+          'templateKey': 'mining_axle_inspection',
+          'templateVersion': '1.0.0',
           'customer': 'CTS',
           'workOrderNumber': 'WO-1001',
+          'axleSerialNumber': 'AX-1001',
         },
         documentNumber: '20260420-0001',
         customer: 'CTS',
         workOrderNumber: 'WO-1001',
+        axleSerialNumber: 'AX-1001',
         photoFiles: <File>[photoFile],
         generatedPdfFile: pdfFile,
       ),
@@ -41,6 +45,10 @@ void main() {
 
     expect(await exportResult.archiveFile.exists(), isTrue);
     expect(await exportResult.archiveFile.length(), greaterThan(0));
+    expect(
+      p.basename(exportResult.archiveFile.path),
+      'CTS_InspectionBundle_20260420-0001_AXLE.zip',
+    );
 
     final importResult = await service.importInspection(
       archiveFile: exportResult.archiveFile,
@@ -48,6 +56,10 @@ void main() {
     );
 
     expect(importResult.documentNumberChanged, isTrue);
+    expect(
+      importResult.inspectionJson['originalDocumentNumber'],
+      '20260420-0001',
+    );
     expect(
       importResult.inspectionJson['documentNumber'],
       isNot('20260420-0001'),
@@ -76,12 +88,16 @@ void main() {
         data: InspectionBackupData(
           inspectionJson: <String, dynamic>{
             'documentNumber': '20260420-0002',
+            'templateKey': 'mining_axle_inspection',
+            'templateVersion': '1.0.0',
             'customer': 'CTS',
             'workOrderNumber': 'WO-1002',
+            'machineSerialNumber': 'MACH-1002',
           },
           documentNumber: '20260420-0002',
           customer: 'CTS',
           workOrderNumber: 'WO-1002',
+          machineSerialNumber: 'MACH-1002',
           generatedPdfFile: pdfFile,
         ),
       );

@@ -30,6 +30,20 @@
 - `generatedPdfPath`
 - `templateKey`
 - `templateVersion`
+- `appName`
+- `equipmentMake`
+- `equipmentModel`
+- `machineSerialNumber`
+- `axleManufacturer`
+- `axleModel`
+- `axleSerialNumber`
+- `hoursOnMachine`
+- `purchaseOrderNumber`
+- `relatedMachineReportDocumentNumber`
+- `customerRepresentativeName`
+- `customerSignatureFilePath`
+- `customerSignatureDate`
+- `customerUnavailableNote`
 - `restoredFromExportPath`
 
 ### InspectionSection
@@ -78,38 +92,28 @@
 - `createdAt`
 - `updatedAt`
 
-### HoseEntry
-- `id`
-- `inspectionId`
-- `hoseNameLocation`
-- `failureType`
-- `hoseSize`
-- `hoseLength`
-- `hoseType`
-- `fittingEndA`
-- `fittingEndB`
-- `quantity`
-- `replacementPartNumbers`
-- `partsNeeded`
-- `notes`
+### OilAnalysisRow
+- `parameter`
+- `result`
+- `limits`
 
-### ComponentEntry
-- `id`
-- `inspectionId`
-- `componentType`
-- `modelPartNumber`
-- `serialNumber`
-- `conditionRating`
-- `notes`
+### MechanicalMeasurementRow
+- `measurement`
+- `specification`
+- `actual`
+- `comments`
+- `performedStatus`
+- `flaggedOutOfSpec`
 
-### FilterEntry
-- `id`
-- `inspectionId`
-- `filterName`
-- `partNumber`
-- `replacedStatus`
-- `conditionRating`
-- `notes`
+### TemperatureRow
+- `location`
+- `temperatureC`
+- `comments`
+- `abnormalFlagged`
+
+### RecommendationRow
+- `priority`
+- `recommendation`
 
 ### EmailRecipient
 - `id`
@@ -127,14 +131,14 @@
 - `checksum`
 
 ## Relationships
-- One inspection has many sections, responses, photos, action items, hose entries, component entries, filter entries, and export records.
-- One inspection has one signature artifact and one primary PDF path.
+- One inspection has many sections, responses, photos, action items, oil analysis rows, mechanical measurement rows, temperature rows, recommendation rows, and export records.
+- One inspection has one CTS inspector signature artifact, optional customer signature artifact, and one primary PDF path.
 - Recipient mappings are stored independently and reused across inspections.
-- Export bundles contain a JSON aggregate of the inspection, section responses, structured entries, photos metadata, and generated PDF reference.
+- Export bundles contain a JSON aggregate of the inspection, section responses, mining axle rows, photos metadata, signatures, and generated PDF reference.
 
 ## Key Rules
 - Document numbers are permanent and never reused.
 - Duplicates receive a new document number.
 - Editing an emailed inspection clears emailed state until re-sent.
-- Flagged responses must carry comments, photos, and linked action items.
+- Poor, defect Yes, Not Acceptable, Not Operational, and Critical responses must carry comments, photos, and linked action items.
 - Media and PDF files are inspection-scoped and must survive app restarts.

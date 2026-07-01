@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:signature/signature.dart';
 
+import '../../core/constants.dart';
+import '../../core/file_utils.dart';
 import '../../core/mining_axle_template.dart';
 import '../../core/theme.dart';
 import '../../core/validators.dart';
@@ -12,7 +14,7 @@ import '../../core/workspace_models.dart';
 import '../../core/workspace_providers.dart';
 import '../../data/models/inspection_enums.dart';
 import '../../data/models/inspection_models.dart';
-import '../../services/backup_service.dart';
+import '../../services/photo_service.dart';
 import '../../widgets/photo_grid.dart';
 import '../../widgets/section_card.dart';
 import '../../widgets/signature_pad.dart';
@@ -294,6 +296,7 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
         const SizedBox(height: 12),
         PhotoGrid(
           photos: _photosForSection(MiningAxleTemplate.visualInspection),
+          onAddPhoto: () => _addPhoto(MiningAxleTemplate.visualInspection),
         ),
       ],
     ),
@@ -353,6 +356,8 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
         const SizedBox(height: 12),
         PhotoGrid(
           photos: _photosForSection(MiningAxleTemplate.planetaryHubInspection),
+          onAddPhoto: () =>
+              _addPhoto(MiningAxleTemplate.planetaryHubInspection),
         ),
       ],
     ),
@@ -802,24 +807,29 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     setState(() => _saving = true);
     try {
       final draft = _draftFromForm();
+      await _persistSignatureIfNeeded(draft);
       await ref.read(workspaceProvider).saveInspectionRecord(draft);
+      final saved =
+          await ref.read(workspaceProvider).inspectionRecordById(draft.id) ??
+          draft;
       if (!mounted) {
-        return draft;
+        return saved;
       }
       setState(() {
-        _record = draft.clone();
+        _record = saved.clone();
         _validationIssues = InspectionValidator.validateForCompletion(
-          draft,
+          saved,
         ).issues;
+        _applyRecord(saved);
       });
       if (showMessage) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Draft ${draft.documentNumber} saved locally.'),
+            content: Text('Draft ${saved.documentNumber} saved locally.'),
           ),
         );
       }
-      return draft;
+      return saved;
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -828,13 +838,31 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
   }
 
   Future<void> _notifyPdf() async {
-    await _saveDraft(showMessage: false);
-    if (!mounted) {
+    final record = await _saveDraft(showMessage: false);
+    if (!mounted || record == null) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('PDF data saved locally for generation.')),
-    );
+    setState(() => _saving = true);
+    try {
+      final result = await ref
+          .read(inspectionWorkflowServiceProvider)
+          .generatePdf(record);
+      await ref.read(workspaceProvider).refresh();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _record = result.inspection.clone();
+        _applyRecord(result.inspection);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('PDF generated: ${result.pdfFile.path}')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
   }
 
   Future<void> _notifyExport() async {
@@ -842,34 +870,31 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     if (record == null) {
       return;
     }
-    final result = await ref
-        .read(backupServiceProvider)
-        .exportInspection(
-          data: InspectionBackupData(
-            inspectionJson: record.toJson(),
-            documentNumber: record.documentNumber,
-            customer: record.customer,
-            workOrderNumber: record.workOrderNumber,
-            axleSerialNumber: record.axleSerialNumber,
-            machineSerialNumber: record.machineSerialNumber,
-            photoFiles: record.photos
-                .map((photo) => File(photo.filePath))
-                .toList(),
-            generatedPdfFile: record.generatedPdfPath == null
-                ? null
-                : File(record.generatedPdfPath!),
+    setState(() => _saving = true);
+    try {
+      final result = await ref
+          .read(inspectionWorkflowServiceProvider)
+          .exportInspection(record);
+      await ref.read(workspaceProvider).refresh();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _record = result.inspection.clone();
+        _applyRecord(result.inspection);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Inspection bundle exported to ${result.exportResult.archiveFile.path}',
           ),
-        );
-    if (!mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Inspection bundle exported to ${result.archiveFile.path}',
         ),
-      ),
-    );
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
   }
 
   Future<void> _completeInspection() async {
@@ -890,10 +915,21 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       return;
     }
 
-    await _saveDraft(showMessage: false);
+    final saved = await _saveDraft(showMessage: false);
+    if (saved == null) {
+      return;
+    }
+    final result = await ref
+        .read(inspectionWorkflowServiceProvider)
+        .completeInspection(saved);
+    await ref.read(workspaceProvider).refresh();
     if (!mounted) {
       return;
     }
+    setState(() {
+      _record = result.inspection.clone();
+      _applyRecord(result.inspection);
+    });
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1218,6 +1254,110 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     if (signed != _signed && mounted) {
       setState(() => _signed = signed);
     }
+  }
+
+  Future<void> _persistSignatureIfNeeded(InspectionRecord draft) async {
+    if (!_signatureController.isNotEmpty) {
+      return;
+    }
+    final bytes = await _signatureController.toPngBytes();
+    if (bytes == null || bytes.isEmpty) {
+      draft.signatureFilePath = null;
+      return;
+    }
+    final directory = await FileUtils.inspectionDirectory(draft.id);
+    final file = File('${directory.path}/${AppConstants.signatureFileName}');
+    await file.writeAsBytes(bytes, flush: true);
+    draft.signatureFilePath = file.path;
+  }
+
+  Future<void> _addPhoto(String sectionKey) async {
+    if (_record == null || _saving) {
+      return;
+    }
+    final source = await showModalBottomSheet<PhotoInputSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Camera'),
+              onTap: () => Navigator.of(context).pop(PhotoInputSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Gallery'),
+              onTap: () => Navigator.of(context).pop(PhotoInputSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.science_outlined),
+              title: const Text('Sample photo'),
+              onTap: () =>
+                  Navigator.of(context).pop(PhotoInputSource.sampleOne),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) {
+      return;
+    }
+
+    final saved = await _saveDraft(showMessage: false);
+    if (saved == null) {
+      return;
+    }
+    final itemKey = _defaultPhotoItemForSection(sectionKey);
+    try {
+      final photo = await ref
+          .read(photoServiceProvider)
+          .addPhoto(
+            inspectionId: saved.id,
+            sectionKey: sectionKey,
+            itemKey: itemKey,
+            source: source,
+            sortOrder: _nextPhotoSortOrder(sectionKey, itemKey),
+            caption: MiningAxleTemplate.itemByKey(sectionKey, itemKey)?.label,
+          );
+      if (photo == null) {
+        return;
+      }
+      setState(() {
+        _recordPhotos.add(photo);
+        _refreshPhotoViews();
+      });
+      final updated = await _saveDraft(showMessage: false);
+      if (!mounted || updated == null) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Photo saved to this inspection.')),
+      );
+    } on PhotoServiceException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  int _nextPhotoSortOrder(String sectionKey, String itemKey) {
+    return _recordPhotos
+        .where(
+          (photo) => photo.sectionKey == sectionKey && photo.itemKey == itemKey,
+        )
+        .length;
+  }
+
+  String _defaultPhotoItemForSection(String sectionKey) {
+    return switch (sectionKey) {
+      MiningAxleTemplate.planetaryHubInspection => 'sun_gear',
+      _ => 'axle_housing',
+    };
   }
 
   void _jumpTo(String key) {

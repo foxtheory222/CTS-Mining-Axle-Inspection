@@ -93,7 +93,13 @@ class _InspectionListScreenState extends ConsumerState<InspectionListScreen> {
                     const SizedBox(width: 18),
                     SizedBox(
                       width: 360,
-                      child: _SummaryPanel(results: inspections),
+                      child: _SummaryPanel(
+                        results: inspections,
+                        onExportBundle: inspections.isEmpty
+                            ? null
+                            : () =>
+                                  _exportLatestFilteredInspection(inspections),
+                      ),
                     ),
                   ],
                 );
@@ -102,7 +108,12 @@ class _InspectionListScreenState extends ConsumerState<InspectionListScreen> {
                 children: [
                   _InspectionList(results: inspections),
                   const SizedBox(height: 18),
-                  _SummaryPanel(results: inspections),
+                  _SummaryPanel(
+                    results: inspections,
+                    onExportBundle: inspections.isEmpty
+                        ? null
+                        : () => _exportLatestFilteredInspection(inspections),
+                  ),
                 ],
               );
             },
@@ -110,6 +121,38 @@ class _InspectionListScreenState extends ConsumerState<InspectionListScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _exportLatestFilteredInspection(
+    List<InspectionSummary> inspections,
+  ) async {
+    final summary = inspections.first;
+    try {
+      final workspace = ref.read(workspaceProvider);
+      final record = await workspace.inspectionRecordById(summary.id);
+      if (record == null) {
+        _showMessage('Inspection ${summary.documentNumber} was not found.');
+        return;
+      }
+      final result = await ref
+          .read(inspectionWorkflowServiceProvider)
+          .exportInspection(record);
+      await workspace.refresh();
+      _showMessage(
+        'Inspection bundle exported to ${result.exportResult.archiveFile.path}',
+      );
+    } catch (error) {
+      _showMessage('Inspection export failed: $error');
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -239,9 +282,10 @@ class _InspectionTile extends StatelessWidget {
 }
 
 class _SummaryPanel extends StatelessWidget {
-  const _SummaryPanel({required this.results});
+  const _SummaryPanel({required this.results, required this.onExportBundle});
 
   final List<InspectionSummary> results;
+  final VoidCallback? onExportBundle;
 
   @override
   Widget build(BuildContext context) {
@@ -292,7 +336,7 @@ class _SummaryPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           OutlinedButton.icon(
-            onPressed: () {},
+            onPressed: onExportBundle,
             icon: const Icon(Icons.file_download_outlined),
             label: const Text('Export bundle'),
           ),

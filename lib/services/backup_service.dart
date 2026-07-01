@@ -255,6 +255,9 @@ class BackupService {
       );
     }
     _rewritePhotoPaths(inspectionJson, restoredPhotoPathsByBasename, warnings);
+    if (restoredPdf != null) {
+      inspectionJson['generatedPdfPath'] = restoredPdf.path;
+    }
 
     return BackupImportResult(
       inspectionJson: inspectionJson,

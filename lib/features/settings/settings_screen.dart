@@ -109,27 +109,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
     final result = await ref
-        .read(backupServiceProvider)
-        .exportInspection(
-          data: InspectionBackupData(
-            inspectionJson: record.toJson(),
-            documentNumber: record.documentNumber,
-            customer: record.customer,
-            workOrderNumber: record.workOrderNumber,
-            axleSerialNumber: record.axleSerialNumber,
-            machineSerialNumber: record.machineSerialNumber,
-            photoFiles: record.photos
-                .map((photo) => File(photo.filePath))
-                .toList(),
-            generatedPdfFile: record.generatedPdfPath == null
-                ? null
-                : File(record.generatedPdfPath!),
-          ),
-        );
+        .read(inspectionWorkflowServiceProvider)
+        .exportInspection(record);
+    await workspace.refresh();
     if (!mounted) {
       return;
     }
-    setState(() => _lastExportPath = result.archiveFile.path);
+    setState(() => _lastExportPath = result.exportResult.archiveFile.path);
     _showMessage('Exported ${record.documentNumber}.');
   }
 

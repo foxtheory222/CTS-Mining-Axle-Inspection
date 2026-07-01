@@ -25,6 +25,61 @@ class InspectionDetailScreen extends ConsumerWidget {
       return _NotFoundState(inspectionId: inspectionId);
     }
 
+    Future<void> runWorkflow(Future<String> Function() action) async {
+      try {
+        final message = await action();
+        if (!context.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      } catch (error) {
+        if (!context.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Inspection action failed: $error')),
+        );
+      }
+    }
+
+    Future<String> generatePdf() async {
+      final record = await controller.inspectionRecordById(inspection.id);
+      if (record == null) {
+        return 'Inspection ${inspection.documentNumber} was not found.';
+      }
+      final result = await ref
+          .read(inspectionWorkflowServiceProvider)
+          .generatePdf(record);
+      await controller.refresh();
+      return 'PDF generated: ${result.pdfFile.path}';
+    }
+
+    Future<String> emailHandoff() async {
+      final record = await controller.inspectionRecordById(inspection.id);
+      if (record == null) {
+        return 'Inspection ${inspection.documentNumber} was not found.';
+      }
+      final result = await ref
+          .read(inspectionWorkflowServiceProvider)
+          .shareInspectionPdf(record);
+      await controller.refresh();
+      return 'Share handoff opened with ${result.pdfFile.path}';
+    }
+
+    Future<String> exportInspection() async {
+      final record = await controller.inspectionRecordById(inspection.id);
+      if (record == null) {
+        return 'Inspection ${inspection.documentNumber} was not found.';
+      }
+      final result = await ref
+          .read(inspectionWorkflowServiceProvider)
+          .exportInspection(record);
+      await controller.refresh();
+      return 'Inspection exported to ${result.exportResult.archiveFile.path}';
+    }
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -46,7 +101,12 @@ class InspectionDetailScreen extends ConsumerWidget {
             builder: (context, constraints) {
               final wide = constraints.maxWidth >= 1180;
               final details = _DetailSections(inspection: inspection);
-              final side = _SideSummary(inspection: inspection);
+              final side = _SideSummary(
+                inspection: inspection,
+                onGeneratePdf: () => runWorkflow(generatePdf),
+                onEmailHandoff: () => runWorkflow(emailHandoff),
+                onExportInspection: () => runWorkflow(exportInspection),
+              );
               if (wide) {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -520,9 +580,17 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _SideSummary extends StatelessWidget {
-  const _SideSummary({required this.inspection});
+  const _SideSummary({
+    required this.inspection,
+    required this.onGeneratePdf,
+    required this.onEmailHandoff,
+    required this.onExportInspection,
+  });
 
   final InspectionSummary inspection;
+  final VoidCallback onGeneratePdf;
+  final VoidCallback onEmailHandoff;
+  final VoidCallback onExportInspection;
 
   @override
   Widget build(BuildContext context) {
@@ -535,21 +603,21 @@ class _SideSummary extends StatelessWidget {
             icon: Icons.picture_as_pdf_outlined,
             title: 'Generate PDF',
             subtitle: 'Create the branded local report.',
-            onTap: () {},
+            onTap: onGeneratePdf,
           ),
           const SizedBox(height: 12),
           _ActionButton(
             icon: Icons.email_outlined,
             title: 'Email handoff',
             subtitle: 'Open the device mail or share flow.',
-            onTap: () {},
+            onTap: onEmailHandoff,
           ),
           const SizedBox(height: 12),
           _ActionButton(
             icon: Icons.file_download_outlined,
             title: 'Export inspection',
             subtitle: 'Bundle PDF and restore data locally.',
-            onTap: () {},
+            onTap: onExportInspection,
           ),
           const SizedBox(height: 16),
           _SummaryMini(

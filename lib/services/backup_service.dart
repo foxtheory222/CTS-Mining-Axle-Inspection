@@ -17,7 +17,7 @@ class BackupServiceException implements Exception {
   String toString() => 'BackupServiceException($code): $message';
 }
 
-enum BackupServiceErrorCode { io, archive, json }
+enum BackupServiceErrorCode { io, archive, json, conflict }
 
 @immutable
 class InspectionBackupData {
@@ -183,7 +183,15 @@ class BackupService {
     }
 
     final archiveBytes = await archiveFile.readAsBytes();
-    final decoded = ZipDecoder().decodeBytes(archiveBytes, verify: true);
+    late final Archive decoded;
+    try {
+      decoded = ZipDecoder().decodeBytes(archiveBytes, verify: true);
+    } on Object catch (error) {
+      throw BackupServiceException(
+        'Archive could not be read: $error',
+        code: BackupServiceErrorCode.archive,
+      );
+    }
     final importRoot = await _buildImportDirectory();
     final restoreFolder = Directory(
       p.join(
@@ -197,6 +205,7 @@ class BackupService {
 
     Map<String, dynamic>? inspectionJson;
     final restoredPhotos = <File>[];
+    final restoredPhotoPathsByBasename = <String, String>{};
     File? restoredPdf;
     final warnings = <String>[];
 
@@ -205,10 +214,7 @@ class BackupService {
         continue;
       }
 
-      final outputPath = p.join(
-        restoreFolder.path,
-        file.name.replaceAll('/', Platform.pathSeparator),
-      );
+      final outputPath = _restorePathForEntry(restoreFolder, file.name);
       final outputFile = File(outputPath);
       await outputFile.parent.create(recursive: true);
       await outputFile.writeAsBytes(file.content as List<int>, flush: true);
@@ -217,6 +223,8 @@ class BackupService {
         inspectionJson = _decodeInspectionJson(outputFile);
       } else if (file.name.startsWith('photos/')) {
         restoredPhotos.add(outputFile);
+        restoredPhotoPathsByBasename[p.basename(outputFile.path)] =
+            outputFile.path;
       } else if (file.name.startsWith('generated_pdf/')) {
         restoredPdf = outputFile;
       }
@@ -241,16 +249,12 @@ class BackupService {
     var documentNumber = originalDocumentNumber;
     var documentNumberChanged = false;
     if (existingDocumentNumbers.contains(originalDocumentNumber)) {
-      documentNumber =
-          conflictResolver?.call(originalDocumentNumber) ??
-          _generateImportedDocumentNumber(originalDocumentNumber);
-      inspectionJson['originalDocumentNumber'] = originalDocumentNumber;
-      inspectionJson['documentNumber'] = documentNumber;
-      documentNumberChanged = true;
-      warnings.add(
-        'Document number conflict resolved by importing as $documentNumber.',
+      throw BackupServiceException(
+        'Inspection $originalDocumentNumber already exists. Exported document numbers are immutable; delete the existing record or create a deliberate duplicate before importing.',
+        code: BackupServiceErrorCode.conflict,
       );
     }
+    _rewritePhotoPaths(inspectionJson, restoredPhotoPathsByBasename, warnings);
 
     return BackupImportResult(
       inspectionJson: inspectionJson,
@@ -296,9 +300,57 @@ class BackupService {
     );
   }
 
-  String _generateImportedDocumentNumber(String originalDocumentNumber) {
-    final stamp = DateTime.now().toUtc().millisecondsSinceEpoch;
-    return '${_safeFileStem(originalDocumentNumber)}_imported_$stamp';
+  String _restorePathForEntry(Directory restoreFolder, String rawEntryName) {
+    final normalizedName = rawEntryName.replaceAll('\\', '/');
+    final parts = p.posix.split(normalizedName);
+    final unsafe =
+        p.posix.isAbsolute(normalizedName) ||
+        parts.isEmpty ||
+        parts.any((part) => part.isEmpty || part == '.' || part == '..');
+    if (unsafe) {
+      throw BackupServiceException(
+        'Archive contains an unsafe path: $rawEntryName',
+        code: BackupServiceErrorCode.archive,
+      );
+    }
+
+    final rootPath = p.normalize(p.absolute(restoreFolder.path));
+    final outputPath = p.normalize(
+      p.absolute(p.joinAll(<String>[rootPath, ...parts])),
+    );
+    if (outputPath != rootPath && !p.isWithin(rootPath, outputPath)) {
+      throw BackupServiceException(
+        'Archive entry escapes the restore folder: $rawEntryName',
+        code: BackupServiceErrorCode.archive,
+      );
+    }
+    return outputPath;
+  }
+
+  void _rewritePhotoPaths(
+    Map<String, dynamic> inspectionJson,
+    Map<String, String> restoredPhotoPathsByBasename,
+    List<String> warnings,
+  ) {
+    final photos = inspectionJson['photos'];
+    if (photos is! List<dynamic>) {
+      return;
+    }
+    for (final entry in photos) {
+      if (entry is! Map<String, dynamic>) {
+        continue;
+      }
+      final originalPath = entry['filePath']?.toString() ?? '';
+      final restoredPath =
+          restoredPhotoPathsByBasename[p.basename(originalPath)];
+      if (restoredPath == null) {
+        if (originalPath.trim().isNotEmpty) {
+          warnings.add('Photo not found in import archive: $originalPath');
+        }
+        continue;
+      }
+      entry['filePath'] = restoredPath;
+    }
   }
 
   String _safeFileStem(String input) {

@@ -10,10 +10,15 @@ class AppDatabase {
   AppDatabase();
 
   Database? _database;
+  Future<Database>? _openingDatabase;
 
   Future<Database> open() async {
     if (_database != null) {
       return _database!;
+    }
+    final opening = _openingDatabase;
+    if (opening != null) {
+      return opening;
     }
 
     final String dbPath = p.join(
@@ -21,7 +26,7 @@ class AppDatabase {
       AppConstants.databaseName,
     );
 
-    _database = await openDatabase(
+    _openingDatabase = openDatabase(
       dbPath,
       version: 1,
       onCreate: (Database db, int version) async {
@@ -110,7 +115,12 @@ class AppDatabase {
       },
     );
 
-    return _database!;
+    try {
+      _database = await _openingDatabase;
+      return _database!;
+    } finally {
+      _openingDatabase = null;
+    }
   }
 
   Future<void> close() async {

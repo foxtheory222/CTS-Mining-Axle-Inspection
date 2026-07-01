@@ -1,18 +1,30 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:cts_mining_axle_inspection/app.dart';
+import 'package:cts_mining_axle_inspection/core/workspace_providers.dart';
+
+import 'support/persistence_test_helpers.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() {
+    sqfliteFfiInit();
+  });
+
   testWidgets('dashboard shell renders the tablet layout', (
     WidgetTester tester,
   ) async {
+    final scope = await _testAppScope();
+    addTearDown(() => _disposeScope(tester, scope));
     await tester.binding.setSurfaceSize(const Size(1600, 1000));
     addTearDown(() async => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(
-      const ProviderScope(child: CtsMiningAxleInspectionApp()),
-    );
+    await tester.pumpWidget(scope.wrap(const CtsMiningAxleInspectionApp()));
     await tester.pumpAndSettle();
 
     expect(find.text('CTS Mining Axle Inspection'), findsWidgets);
@@ -24,11 +36,11 @@ void main() {
   testWidgets('navigation rail opens the inspection list', (
     WidgetTester tester,
   ) async {
+    final scope = await _testAppScope();
+    addTearDown(() => _disposeScope(tester, scope));
     await tester.binding.setSurfaceSize(const Size(1600, 1000));
     addTearDown(() async => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(
-      const ProviderScope(child: CtsMiningAxleInspectionApp()),
-    );
+    await tester.pumpWidget(scope.wrap(const CtsMiningAxleInspectionApp()));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Inspections').last);
@@ -38,38 +50,59 @@ void main() {
     expect(find.text('Inspection Records'), findsOneWidget);
   });
 
-  testWidgets(
-    'new inspection editor exposes mining axle sections and settings',
-    (WidgetTester tester) async {
-      await tester.binding.setSurfaceSize(const Size(1600, 1000));
-      addTearDown(() async => tester.binding.setSurfaceSize(null));
-      await tester.pumpWidget(
-        const ProviderScope(child: CtsMiningAxleInspectionApp()),
-      );
-      await tester.pumpAndSettle();
+  testWidgets('settings exposes template and backup controls', (
+    WidgetTester tester,
+  ) async {
+    final scope = await _testAppScope();
+    addTearDown(() => _disposeScope(tester, scope));
+    await tester.binding.setSurfaceSize(const Size(1600, 1000));
+    addTearDown(() async => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(scope.wrap(const CtsMiningAxleInspectionApp()));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.text('New Inspection').first);
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
 
-      expect(find.text('Inspection Purpose'), findsWidgets);
-      expect(find.text('Visual Inspection'), findsWidgets);
-      expect(find.text('Lubrication Assessment'), findsWidgets);
-      expect(find.text('Differential Inspection'), findsWidgets);
-      expect(find.text('Planetary Hub Inspection'), findsWidgets);
-      expect(find.text('Mechanical Measurements'), findsWidgets);
-      expect(find.text('Temperature Assessment'), findsWidgets);
-      expect(find.text('Condition Monitoring Findings'), findsWidgets);
-      expect(find.text('Recommendations'), findsWidgets);
-      expect(find.text('Overall Axle Health Assessment'), findsWidgets);
-      expect(find.text('Axle Serial Number'), findsWidgets);
-      expect(find.text('Reliability Risk'), findsWidgets);
-      expect(find.textContaining('Fluid Power'), findsNothing);
+    expect(find.text('Template version'), findsOneWidget);
+    expect(find.text('1.0.0'), findsWidgets);
+    expect(find.text('Backup and Restore'), findsOneWidget);
+    expect(find.textContaining('Fluid Power'), findsNothing);
+  });
+}
 
-      await tester.tap(find.text('Settings').last);
-      await tester.pumpAndSettle();
+Future<_TestAppScope> _testAppScope() async {
+  final tempDir = Directory.systemTemp.createTempSync('app_widget_test_');
+  final database = TestAppDatabase(tempDir);
+  return _TestAppScope(tempDir, database);
+}
 
-      expect(find.text('Template version'), findsOneWidget);
-      expect(find.text('1.0.0'), findsWidgets);
-    },
-  );
+Future<void> _disposeScope(WidgetTester tester, _TestAppScope scope) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump();
+  await tester.runAsync(() async {
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+  });
+  await scope.dispose();
+}
+
+class _TestAppScope {
+  _TestAppScope(this.tempDir, this.database);
+
+  final Directory tempDir;
+  final TestAppDatabase database;
+
+  Widget wrap(Widget child) {
+    return ProviderScope(
+      overrides: [appDatabaseProvider.overrideWithValue(database)],
+      child: child,
+    );
+  }
+
+  Future<void> dispose() async {
+    await database.close();
+    if (tempDir.existsSync()) {
+      tempDir.deleteSync(recursive: true);
+    }
+  }
 }

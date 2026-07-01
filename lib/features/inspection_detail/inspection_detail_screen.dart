@@ -31,13 +31,14 @@ class InspectionDetailScreen extends ConsumerWidget {
         children: [
           _DetailHeader(
             inspection: inspection,
-            onEdit: () => context.go(
-              '/inspection/${inspection.id}/edit',
-              extra: inspection,
-            ),
-            onDuplicate: () {
-              final duplicate = controller.duplicateInspection(inspection);
-              context.go('/inspection/${duplicate.id}/edit', extra: duplicate);
+            onEdit: () => context.go('/inspection/${inspection.id}/edit'),
+            onDuplicate: () async {
+              final duplicate = await controller.duplicateInspection(
+                inspection,
+              );
+              if (context.mounted) {
+                context.go('/inspection/${duplicate.id}/edit');
+              }
             },
           ),
           const SizedBox(height: 18),

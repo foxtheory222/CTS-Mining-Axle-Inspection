@@ -26,6 +26,7 @@ class InspectionPhotoView {
     required this.sectionTitle,
     required this.itemLabel,
     required this.capturedAt,
+    this.isAsset = true,
   });
 
   final String assetPath;
@@ -33,6 +34,7 @@ class InspectionPhotoView {
   final String sectionTitle;
   final String itemLabel;
   final DateTime capturedAt;
+  final bool isAsset;
 }
 
 class InspectionActionItemView {

@@ -1,14 +1,31 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants.dart';
 import '../../core/theme.dart';
+import '../../core/workspace_providers.dart';
+import '../../data/models/inspection_models.dart';
+import '../../services/backup_service.dart';
+import '../backup_import_export/backup_import_export_panel.dart';
 import '../../widgets/section_card.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  String? _lastExportPath;
+  String? _lastImportPath;
+
+  @override
   Widget build(BuildContext context) {
+    final workspace = ref.watch(workspaceProvider);
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -35,17 +52,41 @@ class SettingsScreen extends StatelessWidget {
               return wide
                   ? Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Expanded(child: _SettingsPanel()),
-                        SizedBox(width: 18),
-                        SizedBox(width: 360, child: _AboutPanel()),
+                      children: [
+                        Expanded(
+                          child: Column(
+                            children: [
+                              const _SettingsPanel(),
+                              const SizedBox(height: 18),
+                              BackupImportExportPanel(
+                                onExportPressed: workspace.inspections.isEmpty
+                                    ? null
+                                    : _exportLatestInspection,
+                                onImportPressed: _importInspectionBundle,
+                                lastExportPath: _lastExportPath,
+                                lastImportPath: _lastImportPath,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        const SizedBox(width: 360, child: _AboutPanel()),
                       ],
                     )
-                  : const Column(
+                  : Column(
                       children: [
-                        _SettingsPanel(),
-                        SizedBox(height: 18),
-                        _AboutPanel(),
+                        const _SettingsPanel(),
+                        const SizedBox(height: 18),
+                        BackupImportExportPanel(
+                          onExportPressed: workspace.inspections.isEmpty
+                              ? null
+                              : _exportLatestInspection,
+                          onImportPressed: _importInspectionBundle,
+                          lastExportPath: _lastExportPath,
+                          lastImportPath: _lastImportPath,
+                        ),
+                        const SizedBox(height: 18),
+                        const _AboutPanel(),
                       ],
                     );
             },
@@ -53,6 +94,84 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _exportLatestInspection() async {
+    final workspace = ref.read(workspaceProvider);
+    if (workspace.recentInspections.isEmpty) {
+      _showMessage('No inspection is available to export.');
+      return;
+    }
+    final summary = workspace.recentInspections.first;
+    final record = await workspace.inspectionRecordById(summary.id);
+    if (record == null) {
+      _showMessage('Inspection ${summary.documentNumber} was not found.');
+      return;
+    }
+    final result = await ref
+        .read(backupServiceProvider)
+        .exportInspection(
+          data: InspectionBackupData(
+            inspectionJson: record.toJson(),
+            documentNumber: record.documentNumber,
+            customer: record.customer,
+            workOrderNumber: record.workOrderNumber,
+            axleSerialNumber: record.axleSerialNumber,
+            machineSerialNumber: record.machineSerialNumber,
+            photoFiles: record.photos
+                .map((photo) => File(photo.filePath))
+                .toList(),
+            generatedPdfFile: record.generatedPdfPath == null
+                ? null
+                : File(record.generatedPdfPath!),
+          ),
+        );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _lastExportPath = result.archiveFile.path);
+    _showMessage('Exported ${record.documentNumber}.');
+  }
+
+  Future<void> _importInspectionBundle() async {
+    final picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const <String>['zip'],
+      allowMultiple: false,
+    );
+    final path = picked?.files.single.path;
+    if (path == null) {
+      return;
+    }
+
+    try {
+      final workspace = ref.read(workspaceProvider);
+      final result = await ref
+          .read(backupServiceProvider)
+          .importInspection(
+            archiveFile: File(path),
+            existingDocumentNumbers: workspace.documentNumbers,
+          );
+      final record = InspectionRecord.fromJson(result.inspectionJson)
+        ..restoredFromExportPath = path;
+      await workspace.saveInspectionRecord(record);
+      if (!mounted) {
+        return;
+      }
+      setState(() => _lastImportPath = path);
+      _showMessage('Imported ${record.documentNumber}.');
+    } on BackupServiceException catch (error) {
+      _showMessage(error.message);
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 

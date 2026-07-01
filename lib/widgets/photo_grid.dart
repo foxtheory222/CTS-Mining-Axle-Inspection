@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
@@ -72,7 +74,7 @@ class _PhotoCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.asset(photo.assetPath, fit: BoxFit.cover),
+                  _InspectionImage(photo: photo),
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -135,6 +137,36 @@ class _PhotoCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _InspectionImage extends StatelessWidget {
+  const _InspectionImage({required this.photo});
+
+  final InspectionPhotoView photo;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Container(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      alignment: Alignment.center,
+      child: Icon(
+        Icons.broken_image_outlined,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+    );
+    if (photo.isAsset) {
+      return Image.asset(
+        photo.assetPath,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => fallback,
+      );
+    }
+    return Image.file(
+      File(photo.assetPath),
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) => fallback,
     );
   }
 }
@@ -212,35 +244,56 @@ class _EmptyPhotoState extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: CtsPalette.orange.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: const Icon(
-              Icons.photo_library_outlined,
-              color: CtsPalette.orange,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              label,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-          FilledButton.icon(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final leading = Row(
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: CtsPalette.orange.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  Icons.photo_library_outlined,
+                  color: CtsPalette.orange,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  label,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          );
+          final button = FilledButton.icon(
             onPressed: () {},
             icon: const Icon(Icons.add),
             label: const Text('Add first photo'),
-          ),
-        ],
+          );
+          if (constraints.maxWidth < 380) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                leading,
+                const SizedBox(height: 14),
+                Align(alignment: Alignment.centerLeft, child: button),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: leading),
+              const SizedBox(width: 14),
+              button,
+            ],
+          );
+        },
       ),
     );
   }

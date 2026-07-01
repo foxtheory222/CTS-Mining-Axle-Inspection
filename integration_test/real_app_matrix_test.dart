@@ -52,9 +52,14 @@ void main() {
         find.text('Template key: mining_axle_inspection.'),
         findsOneWidget,
       );
+      expect(find.text('Backup and Restore'), findsOneWidget);
 
       await tester.tap(find.text('New Inspection').last);
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(seconds: 2));
+      });
+      await tester.pump();
 
       for (final title in MiningAxleTemplate.sections.map(
         (section) => section.title,
@@ -109,13 +114,13 @@ void main() {
         SwitchListTile,
         'Performed Using Infrared Thermography',
       );
-      expect(tester.widget<SwitchListTile>(thermographyTile).value, isTrue);
-      await tester.tap(thermographyTile);
-      await tester.pumpAndSettle();
       expect(tester.widget<SwitchListTile>(thermographyTile).value, isFalse);
       await tester.tap(thermographyTile);
       await tester.pumpAndSettle();
       expect(tester.widget<SwitchListTile>(thermographyTile).value, isTrue);
+      await tester.tap(thermographyTile);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(thermographyTile).value, isFalse);
 
       for (final finding in MiningAxleTemplate.conditionMonitoringFindings) {
         await _tapFilterChip(tester, finding.label);
@@ -128,11 +133,21 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.ensureVisible(
+        find.widgetWithText(FilledButton, 'Save Draft').first,
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Save Draft').first);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Draft'), findsWidgets);
+      expect(find.textContaining('saved locally'), findsWidgets);
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+
       await tester.ensureVisible(find.text('Generate PDF').last);
       await tester.tap(find.widgetWithText(FilledButton, 'Generate PDF').last);
       await tester.pumpAndSettle();
       expect(
-        find.text('PDF regenerated locally for this report.'),
+        find.text('PDF data saved locally for generation.'),
         findsOneWidget,
       );
       await tester.pump(const Duration(seconds: 4));
@@ -141,7 +156,10 @@ void main() {
       await tester.ensureVisible(exportButton);
       await tester.tap(exportButton);
       await tester.pumpAndSettle();
-      expect(find.text('Inspection bundle exported locally.'), findsOneWidget);
+      expect(
+        find.textContaining('Inspection bundle exported to'),
+        findsOneWidget,
+      );
       await tester.pump(const Duration(seconds: 4));
       await tester.pumpAndSettle();
       final completeButton = find.widgetWithText(
@@ -151,9 +169,7 @@ void main() {
       await tester.ensureVisible(completeButton);
       await tester.tap(completeButton);
       await tester.pumpAndSettle();
-      expect(find.text('Complete inspection'), findsWidgets);
-      await tester.tap(find.text('Close'));
-      await tester.pumpAndSettle();
+      expect(find.textContaining('Complete blocked by'), findsOneWidget);
 
       expect(errors, isEmpty);
     },

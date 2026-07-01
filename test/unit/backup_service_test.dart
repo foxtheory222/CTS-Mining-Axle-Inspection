@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:cts_mining_axle_inspection/services/backup_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
@@ -33,6 +35,9 @@ void main() {
           'customer': 'CTS',
           'workOrderNumber': 'WO-1001',
           'axleSerialNumber': 'AX-1001',
+          'photos': <Map<String, dynamic>>[
+            <String, dynamic>{'filePath': photoFile.path},
+          ],
         },
         documentNumber: '20260420-0001',
         customer: 'CTS',
@@ -50,21 +55,31 @@ void main() {
       'CTS_InspectionBundle_20260420-0001_AXLE.zip',
     );
 
-    final importResult = await service.importInspection(
-      archiveFile: exportResult.archiveFile,
-      existingDocumentNumbers: const <String>{'20260420-0001'},
+    expect(
+      () => service.importInspection(
+        archiveFile: exportResult.archiveFile,
+        existingDocumentNumbers: const <String>{'20260420-0001'},
+      ),
+      throwsA(
+        isA<BackupServiceException>().having(
+          (exception) => exception.code,
+          'code',
+          BackupServiceErrorCode.conflict,
+        ),
+      ),
     );
 
-    expect(importResult.documentNumberChanged, isTrue);
-    expect(
-      importResult.inspectionJson['originalDocumentNumber'],
-      '20260420-0001',
+    final importResult = await service.importInspection(
+      archiveFile: exportResult.archiveFile,
     );
-    expect(
-      importResult.inspectionJson['documentNumber'],
-      isNot('20260420-0001'),
-    );
+    expect(importResult.documentNumberChanged, isFalse);
+    expect(importResult.documentNumber, '20260420-0001');
     expect(importResult.restoredPhotoFiles, isNotEmpty);
+    final photos = importResult.inspectionJson['photos'] as List<dynamic>;
+    expect(
+      (photos.single as Map<String, dynamic>)['filePath'],
+      importResult.restoredPhotoFiles.single.path,
+    );
     expect(importResult.restoredPdfFile, isNotNull);
   });
 
@@ -109,6 +124,51 @@ void main() {
 
       expect(importResult.documentNumber, '20260420-0002');
       expect(importResult.documentNumberChanged, isFalse);
+    },
+  );
+
+  test(
+    'Backup import rejects zip entries that escape restore folder',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'backup_service_traversal_',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      final archive = Archive()
+        ..addFile(
+          ArchiveFile.string(
+            'inspection.json',
+            jsonEncode(<String, dynamic>{
+              'documentNumber': '20260420-0042',
+              'templateKey': 'mining_axle_inspection',
+              'templateVersion': '1.0.0',
+            }),
+          ),
+        )
+        ..addFile(ArchiveFile.string('../../outside.txt', 'owned'));
+      final zipFile = File(p.join(tempDir.path, 'malicious.zip'));
+      await zipFile.writeAsBytes(ZipEncoder().encode(archive), flush: true);
+
+      final service = BackupService(
+        documentsDirectoryProvider: () async => tempDir,
+      );
+
+      expect(
+        () => service.importInspection(archiveFile: zipFile),
+        throwsA(
+          isA<BackupServiceException>().having(
+            (exception) => exception.code,
+            'code',
+            BackupServiceErrorCode.archive,
+          ),
+        ),
+      );
+      expect(await File(p.join(tempDir.path, 'outside.txt')).exists(), isFalse);
     },
   );
 }

@@ -1,20 +1,42 @@
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+
+import '../data/models/inspection_enums.dart';
+import '../data/models/inspection_models.dart';
+import '../data/repositories/inspection_repository.dart';
+import 'constants.dart';
 import 'mining_axle_template.dart';
 import 'theme.dart';
-import '../data/models/inspection_enums.dart';
 import 'workspace_models.dart';
 
 class AppWorkspaceController extends ChangeNotifier {
-  AppWorkspaceController() : _inspections = _seedInspections();
+  AppWorkspaceController({required InspectionRepository repository})
+    : _repository = repository {
+    Timer.run(() {
+      if (!_disposed) {
+        unawaited(refresh());
+      }
+    });
+  }
 
-  final List<InspectionSummary> _inspections;
+  final InspectionRepository _repository;
+  final List<InspectionSummary> _inspections = <InspectionSummary>[];
+  final Map<String, InspectionRecord> _recordsById =
+      <String, InspectionRecord>{};
+
   String _searchQuery = '';
   InspectionStatus? _statusFilter;
+  bool _isLoading = true;
+  bool _disposed = false;
+  Object? _lastError;
 
   String get searchQuery => _searchQuery;
   InspectionStatus? get statusFilter => _statusFilter;
+  bool get isLoading => _isLoading;
+  Object? get lastError => _lastError;
+  Set<String> get documentNumbers =>
+      _inspections.map((item) => item.documentNumber).toSet();
 
   List<InspectionSummary> get inspections => List.unmodifiable(_inspections);
 
@@ -102,10 +124,26 @@ class AppWorkspaceController extends ChangeNotifier {
     return null;
   }
 
+  Future<InspectionRecord?> inspectionRecordById(String id) async {
+    final cached = _recordsById[id];
+    if (cached != null) {
+      return cached.clone();
+    }
+    final record = await _repository.getInspection(id);
+    if (record == null) {
+      return null;
+    }
+    _cacheRecord(record);
+    notifyListeners();
+    return record.clone();
+  }
+
   List<InspectionSummary> get recentInspections {
     final copy = List<InspectionSummary>.of(_inspections);
     copy.sort((a, b) => b.lastUpdatedAt.compareTo(a.lastUpdatedAt));
-    return copy.take(6).toList(growable: false);
+    return copy
+        .take(AppConstants.recentInspectionLimit)
+        .toList(growable: false);
   }
 
   List<InspectionActionItemView> get openActionItems =>
@@ -127,365 +165,213 @@ class AppWorkspaceController extends ChangeNotifier {
     notifyListeners();
   }
 
-  InspectionSummary createInspection() {
-    final now = DateTime.now();
-    final documentNumber = _nextDocumentNumberForDate(now);
-    final inspection = InspectionSummary(
-      id: _makeId(documentNumber),
-      documentNumber: documentNumber,
-      customer: '',
-      workOrderNumber: '',
-      customerReference: '',
-      assetName: '',
-      siteLocation: '',
-      technicianName: '',
-      servicingShop: '',
-      inspectionDateTime: now,
-      createdAt: now,
-      status: InspectionStatus.draft,
-      sections: _defaultSections(),
-      actionItems: [],
-      photos: [],
-      flaggedCount: 0,
-      atRiskCount: 0,
-      unsatisfactoryCount: 0,
-      criticalCount: 0,
-      photoCount: 0,
-      lastUpdatedAt: now,
-    );
-    _inspections.insert(0, inspection);
+  Future<void> refresh() async {
+    if (_disposed) {
+      return;
+    }
+    _isLoading = true;
+    _lastError = null;
     notifyListeners();
-    return inspection;
-  }
-
-  InspectionSummary duplicateInspection(InspectionSummary source) {
-    final now = DateTime.now();
-    final documentNumber = _nextDocumentNumberForDate(now);
-    final clone = source.copyWith(
-      id: _makeId(documentNumber),
-      documentNumber: documentNumber,
-      status: InspectionStatus.draft,
-      createdAt: now,
-      inspectionDateTime: now,
-      completedAt: null,
-      emailedAt: null,
-      finalTechComments: null,
-      criticalAcknowledged: false,
-      generatedPdfPath: null,
-      sections: _defaultSections(),
-      actionItems: [],
-      photos: [],
-      flaggedCount: 0,
-      atRiskCount: 0,
-      unsatisfactoryCount: 0,
-      criticalCount: 0,
-      photoCount: 0,
-      lastUpdatedAt: now,
-    );
-    _inspections.insert(0, clone);
-    notifyListeners();
-    return clone;
-  }
-
-  void replaceInspection(InspectionSummary updated) {
-    final index = _inspections.indexWhere((item) => item.id == updated.id);
-    if (index != -1) {
-      _inspections[index] = updated;
-      notifyListeners();
+    try {
+      final records = await _repository.allInspections();
+      _recordsById
+        ..clear()
+        ..addEntries(records.map((record) => MapEntry(record.id, record)));
+      _inspections
+        ..clear()
+        ..addAll(records.map(_summaryFor));
+      _sortSummaries();
+    } catch (error) {
+      _lastError = error;
+    } finally {
+      _isLoading = false;
+      if (!_disposed) {
+        notifyListeners();
+      }
     }
   }
 
-  String _nextDocumentNumberForDate(DateTime date) {
-    final dayStamp = DateFormat('yyyyMMdd').format(date);
-    final matches = _inspections
-        .where((item) => item.documentNumber.startsWith('$dayStamp-'))
-        .length;
-    final sequence = matches + 1;
-    return '$dayStamp-${sequence.toString().padLeft(4, '0')}';
+  Future<InspectionRecord> createInspectionRecord({DateTime? createdAt}) async {
+    final record = await _repository.createInspection(createdAt: createdAt);
+    _cacheRecord(record);
+    notifyListeners();
+    return record.clone();
   }
 
-  String _makeId(String documentNumber) {
-    return 'inspection_${documentNumber.replaceAll('-', '_')}';
+  Future<InspectionSummary> createInspection({DateTime? createdAt}) async {
+    final record = await createInspectionRecord(createdAt: createdAt);
+    return _summaryFor(record);
   }
 
-  static List<InspectionSummary> _seedInspections() {
-    final today = DateTime(2026, 4, 20, 8, 30);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final inspection1 = InspectionSummary(
-      id: 'inspection_20260420_0001',
-      documentNumber: '20260420-0001',
-      customer: 'Moraine Quarry',
-      workOrderNumber: 'WO-48912',
-      customerReference: 'PO-55412',
-      assetName: 'CAT 793F Rear Axle AXLE-1001',
-      siteLocation: 'East Pit Service Bay',
-      technicianName: 'R. Ellis',
-      servicingShop: 'CTS Edmonton Service',
-      inspectionDateTime: today,
-      createdAt: today,
-      status: InspectionStatus.complete,
-      sections: _defaultSections(
-        atRisk: 1,
-        unsat: 1,
-        critical: 0,
-        photoCount: 5,
-      ),
-      actionItems: [
-        InspectionActionItemView(
-          title: 'Schedule hub seal replacement',
-          description:
-              'Light seepage was noted at the left planetary hub seal during the inspection.',
-          conditionRating: ConditionRating.unsatisfactory,
-          sourceSection: 'Planetary Hub Inspection',
-          sourceItem: 'Hub Seals',
-          partsRequired: 'Hub seal kit and axle oil top-up',
-        ),
-      ],
-      photos: [
-        InspectionPhotoView(
-          assetPath: 'assets/demo/sample_photo_1.jpg',
-          caption: 'As-found axle overview',
-          sectionTitle: 'Visual Inspection',
-          itemLabel: 'Axle Housing',
-          capturedAt: DateTime(2026, 4, 20, 8, 45),
-        ),
-        InspectionPhotoView(
-          assetPath: 'assets/demo/sample_photo_2.jpg',
-          caption: 'Planetary hub evidence',
-          sectionTitle: 'Planetary Hub Inspection',
-          itemLabel: 'Wheel Bearings',
-          capturedAt: DateTime(2026, 4, 20, 9, 10),
-        ),
-      ],
-      flaggedCount: 2,
-      atRiskCount: 1,
-      unsatisfactoryCount: 1,
-      criticalCount: 0,
-      photoCount: 5,
-      lastUpdatedAt: today.add(const Duration(minutes: 32)),
-      completedAt: today.add(const Duration(hours: 1, minutes: 14)),
-      finalTechComments:
-          'Axle operating within service limits with hub seal replacement planned.',
-      generatedPdfPath:
-          '/storage/emulated/0/Download/CTS_AXLE_Moraine_Quarry_AXLE-1001_20260420_20260420-0001.pdf',
-    );
-
-    final inspection2 = InspectionSummary(
-      id: 'inspection_20260420_0002',
-      documentNumber: '20260420-0002',
-      customer: 'North Basin Processing',
-      workOrderNumber: 'WO-48921',
-      customerReference: 'JOB-7745',
-      assetName: 'Komatsu 830E Front Axle AXLE-2002',
-      siteLocation: 'North Pit Maintenance Pad',
-      technicianName: 'K. Morgan',
-      servicingShop: 'CTS Calgary Service',
-      inspectionDateTime: today.add(const Duration(hours: 2)),
-      createdAt: today.add(const Duration(hours: 2)),
-      status: InspectionStatus.emailed,
-      sections: _defaultSections(
-        atRisk: 2,
-        unsat: 1,
-        critical: 1,
-        photoCount: 7,
-      ),
-      actionItems: [
-        InspectionActionItemView(
-          title: 'Lockout/Tagout before restart',
-          description:
-              'Critical axle housing crack requires isolation until corrective work is complete.',
-          conditionRating: ConditionRating.criticalOutOfService,
-          sourceSection: 'Visual Inspection',
-          sourceItem: 'Axle Housing',
-          partsRequired: 'Housing repair plan and lockout hardware',
-        ),
-        InspectionActionItemView(
-          title: 'Replace contaminated breather',
-          description:
-              'Breather contamination noted; replacement recommended before return to service.',
-          conditionRating: ConditionRating.monitorAtRisk,
-          sourceSection: 'Visual Inspection',
-          sourceItem: 'Breathers',
-          partsRequired: 'Axle breather element 12-7781',
-        ),
-      ],
-      photos: [
-        InspectionPhotoView(
-          assetPath: 'assets/demo/sample_photo_1.jpg',
-          caption: 'Critical housing crack',
-          sectionTitle: 'Visual Inspection',
-          itemLabel: 'Axle Housing',
-          capturedAt: DateTime(2026, 4, 20, 10, 12),
-        ),
-        InspectionPhotoView(
-          assetPath: 'assets/demo/sample_photo_2.jpg',
-          caption: 'Oil sample evidence',
-          sectionTitle: 'Lubrication Assessment',
-          itemLabel: 'Oil Condition',
-          capturedAt: DateTime(2026, 4, 20, 10, 18),
-        ),
-      ],
-      flaggedCount: 3,
-      atRiskCount: 2,
-      unsatisfactoryCount: 1,
-      criticalCount: 1,
-      photoCount: 7,
-      lastUpdatedAt: today.add(const Duration(hours: 2, minutes: 55)),
-      completedAt: today.add(const Duration(hours: 3, minutes: 10)),
-      emailedAt: today.add(const Duration(hours: 3, minutes: 42)),
-      criticalAcknowledged: true,
-      generatedPdfPath:
-          '/storage/emulated/0/Download/CTS_AXLE_North_Basin_Processing_AXLE-2002_20260420_20260420-0002.pdf',
-    );
-
-    final inspection3 = InspectionSummary(
-      id: 'inspection_20260419_0001',
-      documentNumber: '20260419-0001',
-      customer: 'Prairie Rail Services',
-      workOrderNumber: 'WO-48888',
-      customerReference: 'PR-1182',
-      assetName: 'CAT 777G Rear Axle AXLE-3003',
-      siteLocation: 'Maintenance Yard',
-      technicianName: 'T. Singh',
-      servicingShop: 'CTS Red Deer Service',
-      inspectionDateTime: yesterday,
-      createdAt: yesterday,
-      status: InspectionStatus.inProgress,
-      sections: _defaultSections(
-        atRisk: 0,
-        unsat: 0,
-        critical: 0,
-        photoCount: 2,
-      ),
-      actionItems: [],
-      photos: [
-        InspectionPhotoView(
-          assetPath: 'assets/demo/sample_photo_1.jpg',
-          caption: 'Axle identification photo',
-          sectionTitle: 'Inspection Purpose',
-          itemLabel: 'Axle serial plate',
-          capturedAt: DateTime(2026, 4, 19, 15, 01),
-        ),
-      ],
-      flaggedCount: 0,
-      atRiskCount: 0,
-      unsatisfactoryCount: 0,
-      criticalCount: 0,
-      photoCount: 2,
-      lastUpdatedAt: yesterday.add(const Duration(hours: 1, minutes: 45)),
-    );
-
-    return [inspection2, inspection1, inspection3];
+  Future<InspectionSummary> duplicateInspection(
+    InspectionSummary source,
+  ) async {
+    final record = await _repository.getInspection(source.id);
+    if (record == null) {
+      throw StateError('Inspection ${source.id} no longer exists.');
+    }
+    final duplicate = await _repository.duplicateInspection(record);
+    _cacheRecord(duplicate);
+    notifyListeners();
+    return _summaryFor(duplicate);
   }
 
-  static List<InspectionSectionView> _defaultSections({
-    int atRisk = 0,
-    int unsat = 0,
-    int critical = 0,
-    int photoCount = 0,
-  }) {
-    return [
-      InspectionSectionView(
-        key: MiningAxleTemplate.inspectionPurpose,
-        title: 'Inspection Purpose',
-        completionState: SectionCompletionState.complete,
-        summary: 'Purpose and header details captured.',
-        photoCount: 0,
-      ),
-      InspectionSectionView(
-        key: MiningAxleTemplate.visualInspection,
-        title: 'Visual Inspection',
-        completionState: SectionCompletionState.complete,
-        summary: 'Axle housing, wheel ends, breathers, and fasteners checked.',
-        photoCount: photoCount > 1 ? 2 : 0,
-        flaggedCount: atRisk + unsat + critical,
-        criticalWarning: critical > 0,
-      ),
-      InspectionSectionView(
-        key: MiningAxleTemplate.lubricationAssessment,
-        title: 'Lubrication Assessment',
-        completionState: critical > 0
-            ? SectionCompletionState.blocked
-            : atRisk > 0 || unsat > 0
-            ? SectionCompletionState.inProgress
-            : SectionCompletionState.complete,
-        summary: critical > 0
-            ? 'Critical lubrication-related warning acknowledged.'
-            : atRisk > 0 || unsat > 0
-            ? 'Flagged lubrication findings need follow-up.'
-            : 'Oil level and condition are within tolerance.',
-        photoCount: photoCount > 2 ? 1 : 0,
-        flaggedCount: atRisk,
-        criticalWarning: critical > 0,
-      ),
-      InspectionSectionView(
-        key: MiningAxleTemplate.differentialInspection,
-        title: 'Differential Inspection',
-        completionState: atRisk > 0 || unsat > 0
-            ? SectionCompletionState.inProgress
-            : SectionCompletionState.complete,
-        summary: 'Crown wheel, pinion, bearings, backlash, and lock reviewed.',
-        photoCount: photoCount > 3 ? 1 : 0,
-        flaggedCount: unsat > 0 ? 1 : 0,
-      ),
-      InspectionSectionView(
-        key: MiningAxleTemplate.planetaryHubInspection,
-        title: 'Planetary Hub Inspection',
-        completionState: atRisk > 0
-            ? SectionCompletionState.inProgress
-            : SectionCompletionState.complete,
-        summary: 'Sun gears, planet gears, seals, and wheel bearings checked.',
-        photoCount: photoCount > 4 ? 1 : 0,
-        flaggedCount: atRisk > 0 ? 1 : 0,
-      ),
-      InspectionSectionView(
-        key: MiningAxleTemplate.mechanicalMeasurementsSection,
-        title: 'Mechanical Measurements',
-        completionState: SectionCompletionState.complete,
-        summary: 'Backlash, preload, end float, and runout values stored.',
-        photoCount: photoCount > 5 ? 1 : 0,
-      ),
-      InspectionSectionView(
-        key: MiningAxleTemplate.temperatureAssessment,
-        title: 'Temperature Assessment',
-        completionState: atRisk > 0
-            ? SectionCompletionState.inProgress
-            : SectionCompletionState.complete,
-        summary: 'Infrared thermography readings captured.',
-        photoCount: photoCount > 6 ? 1 : 0,
-      ),
-      InspectionSectionView(
-        key: MiningAxleTemplate.conditionMonitoringFindingsSection,
-        title: 'Condition Monitoring Findings',
-        completionState: atRisk > 0 || unsat > 0 || critical > 0
-            ? SectionCompletionState.inProgress
-            : SectionCompletionState.complete,
-        summary: 'Abnormal findings and supporting details reviewed.',
-        photoCount: 0,
-        flaggedCount: atRisk + unsat + critical,
-        criticalWarning: critical > 0,
-      ),
-      InspectionSectionView(
-        key: MiningAxleTemplate.recommendations,
-        title: 'Recommendations',
-        completionState: atRisk > 0 || unsat > 0 || critical > 0
-            ? SectionCompletionState.inProgress
-            : SectionCompletionState.complete,
-        summary: 'Priority actions and monitoring recommendations tracked.',
-        photoCount: 0,
-        flaggedCount: atRisk + unsat + critical,
-      ),
-      InspectionSectionView(
-        key: MiningAxleTemplate.overallHealth,
-        title: 'Overall Axle Health Assessment',
-        completionState: atRisk > 0 || unsat > 0 || critical > 0
-            ? SectionCompletionState.blocked
-            : SectionCompletionState.complete,
-        summary: 'Ready for signoff when validation is clear.',
-        photoCount: 0,
-        flaggedCount: atRisk + unsat + critical,
-        criticalWarning: critical > 0,
-      ),
-    ];
+  Future<InspectionSummary> saveInspectionRecord(
+    InspectionRecord inspection,
+  ) async {
+    final saved = await _repository.saveInspection(inspection);
+    _cacheRecord(saved);
+    notifyListeners();
+    return _summaryFor(saved);
+  }
+
+  void _cacheRecord(InspectionRecord record) {
+    _recordsById[record.id] = record.clone();
+    final summary = _summaryFor(record);
+    final index = _inspections.indexWhere((item) => item.id == record.id);
+    if (index == -1) {
+      _inspections.add(summary);
+    } else {
+      _inspections[index] = summary;
+    }
+    _sortSummaries();
+  }
+
+  void _sortSummaries() {
+    _inspections.sort((a, b) => b.lastUpdatedAt.compareTo(a.lastUpdatedAt));
+  }
+
+  InspectionSummary _summaryFor(InspectionRecord record) {
+    return InspectionSummary(
+      id: record.id,
+      documentNumber: record.documentNumber,
+      customer: _displayOrPlaceholder(record.customer, 'Unassigned customer'),
+      workOrderNumber: record.workOrderNumber,
+      customerReference: record.customerReference,
+      assetName: _assetLabel(record),
+      siteLocation: record.siteLocation,
+      technicianName: record.technicianName,
+      servicingShop: record.servicingShop,
+      inspectionDateTime: record.inspectionDateTime,
+      createdAt: record.createdAt,
+      status: record.status,
+      sections: _sectionViews(record),
+      actionItems: record.actionItems.map(_actionItemView).toList(),
+      photos: record.photos.map(_photoView).toList(),
+      flaggedCount: record.flaggedItemCount,
+      atRiskCount: record.atRiskCount,
+      unsatisfactoryCount: record.unsatisfactoryCount,
+      criticalCount: record.criticalCount,
+      photoCount: record.photoCount,
+      lastUpdatedAt: record.updatedAt,
+      completedAt: record.completedAt,
+      emailedAt: record.emailedAt,
+      finalTechComments: record.finalTechComments,
+      criticalAcknowledged: record.criticalAcknowledged,
+      generatedPdfPath: record.generatedPdfPath,
+    );
+  }
+
+  List<InspectionSectionView> _sectionViews(InspectionRecord record) {
+    final sections = record.sections.isEmpty
+        ? MiningAxleTemplate.sections.map(
+            (section) => InspectionSectionProgress(
+              id: '${record.id}_${section.key}',
+              inspectionId: record.id,
+              sectionKey: section.key,
+              title: section.title,
+              sortOrder: section.sortOrder,
+              completionState: SectionCompletionState.notStarted,
+            ),
+          )
+        : record.sections;
+
+    return sections
+        .map(
+          (section) => InspectionSectionView(
+            key: section.sectionKey,
+            title: section.title,
+            completionState: section.completionState,
+            summary: _sectionSummary(section.completionState),
+            photoCount: record.photos
+                .where((photo) => photo.sectionKey == section.sectionKey)
+                .length,
+            flaggedCount: record.responses
+                .where(
+                  (response) =>
+                      response.sectionKey == section.sectionKey &&
+                      (response.isFlagged ||
+                          (response.conditionRating?.isFlagged ?? false)),
+                )
+                .length,
+            criticalWarning: record.responses.any(
+              (response) =>
+                  response.sectionKey == section.sectionKey &&
+                  response.conditionRating ==
+                      ConditionRating.criticalOutOfService,
+            ),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  InspectionActionItemView _actionItemView(ActionItem item) {
+    return InspectionActionItemView(
+      title: item.title,
+      description: item.description,
+      conditionRating: item.conditionRating ?? ConditionRating.monitorAtRisk,
+      sourceSection: item.sourceSectionKey == null
+          ? 'Manual Action'
+          : MiningAxleTemplate.sectionTitleFor(item.sourceSectionKey!),
+      sourceItem: item.sourceItemKey ?? 'Manual',
+      partsRequired: item.partsRequired,
+      isAutoGenerated: item.isAutoGenerated,
+    );
+  }
+
+  InspectionPhotoView _photoView(InspectionPhoto photo) {
+    final item = MiningAxleTemplate.itemByKey(photo.sectionKey, photo.itemKey);
+    return InspectionPhotoView(
+      assetPath: photo.filePath,
+      isAsset: false,
+      caption: (photo.caption ?? '').trim().isEmpty
+          ? 'Inspection photo'
+          : photo.caption!.trim(),
+      sectionTitle: MiningAxleTemplate.sectionTitleFor(photo.sectionKey),
+      itemLabel: item?.label ?? photo.itemKey,
+      capturedAt: photo.capturedAt,
+    );
+  }
+
+  String _assetLabel(InspectionRecord record) {
+    if (record.assetName.trim().isNotEmpty) {
+      return record.assetName.trim();
+    }
+    final parts = <String>[
+      record.equipmentMake,
+      record.equipmentModel,
+      record.axleSerialNumber,
+    ].where((part) => part.trim().isNotEmpty).join(' ');
+    return parts.trim().isEmpty ? 'Unassigned axle' : parts.trim();
+  }
+
+  String _displayOrPlaceholder(String value, String placeholder) {
+    return value.trim().isEmpty ? placeholder : value.trim();
+  }
+
+  String _sectionSummary(SectionCompletionState state) {
+    return switch (state) {
+      SectionCompletionState.notStarted => 'Required information not started.',
+      SectionCompletionState.inProgress =>
+        'Inspection information in progress.',
+      SectionCompletionState.complete => 'Required information complete.',
+      SectionCompletionState.blocked => 'Completion blockers need attention.',
+    };
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }

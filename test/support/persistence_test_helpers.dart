@@ -13,16 +13,21 @@ class TestAppDatabase extends AppDatabase {
 
   final Directory directory;
   Database? _database;
+  Future<Database>? _openingDatabase;
 
   @override
   Future<Database> open() async {
     if (_database != null) {
       return _database!;
     }
+    final opening = _openingDatabase;
+    if (opening != null) {
+      return opening;
+    }
 
     final dbPath =
         '${directory.path}${Platform.pathSeparator}${AppConstants.databaseName}';
-    _database = await databaseFactoryFfi.openDatabase(
+    _openingDatabase = databaseFactoryFfi.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
         version: 1,
@@ -76,7 +81,12 @@ class TestAppDatabase extends AppDatabase {
         },
       ),
     );
-    return _database!;
+    try {
+      _database = await _openingDatabase;
+      return _database!;
+    } finally {
+      _openingDatabase = null;
+    }
   }
 
   @override

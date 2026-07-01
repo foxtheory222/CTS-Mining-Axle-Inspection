@@ -1,28 +1,43 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:signature/signature.dart';
 
 import '../../core/mining_axle_template.dart';
 import '../../core/theme.dart';
+import '../../core/validators.dart';
 import '../../core/workspace_models.dart';
+import '../../core/workspace_providers.dart';
 import '../../data/models/inspection_enums.dart';
+import '../../data/models/inspection_models.dart';
+import '../../services/backup_service.dart';
 import '../../widgets/photo_grid.dart';
 import '../../widgets/section_card.dart';
 import '../../widgets/signature_pad.dart';
 
-class InspectionFormScreen extends StatefulWidget {
-  const InspectionFormScreen({super.key, this.seed});
+class InspectionFormScreen extends ConsumerStatefulWidget {
+  const InspectionFormScreen({
+    super.key,
+    this.inspectionId,
+    this.initialRecord,
+  });
 
-  final InspectionSummary? seed;
+  final String? inspectionId;
+  final InspectionRecord? initialRecord;
 
   @override
-  State<InspectionFormScreen> createState() => _InspectionFormScreenState();
+  ConsumerState<InspectionFormScreen> createState() =>
+      _InspectionFormScreenState();
 }
 
-class _InspectionFormScreenState extends State<InspectionFormScreen> {
+class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
   late final ScrollController _scrollController;
   late final SignatureController _signatureController;
   late final Map<String, GlobalKey> _keys;
   late final TextEditingController _customer;
+  late final TextEditingController _workOrder;
   late final TextEditingController _site;
   late final TextEditingController _equipmentMake;
   late final TextEditingController _equipmentModel;
@@ -32,47 +47,34 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
   late final TextEditingController _axleSerial;
   late final TextEditingController _hours;
   late final TextEditingController _inspector;
+  late final TextEditingController _servicingShop;
   late final TextEditingController _purchaseOrder;
   late final TextEditingController _relatedReport;
+  late final TextEditingController _sampleNumber;
   late final TextEditingController _findingDetails;
   late final TextEditingController _recommendation;
   late final TextEditingController _reviewNotes;
 
   final Map<String, String> _answers = <String, String>{};
-  final Set<String> _selectedPurposes = <String>{
-    'purpose_preventive_maintenance',
-  };
+  final Set<String> _selectedPurposes = <String>{};
   final Set<String> _selectedFindings = <String>{};
+  final List<InspectionPhoto> _recordPhotos = <InspectionPhoto>[];
+  final List<InspectionPhotoView> _photos = <InspectionPhotoView>[];
 
-  bool _thermographyPerformed = true;
+  InspectionRecord? _record;
+  bool _loadingRecord = true;
+  bool _saving = false;
+  bool _thermographyPerformed = false;
   bool _criticalAcknowledged = false;
   bool _signed = false;
-
-  final List<InspectionPhotoView> _photos = <InspectionPhotoView>[
-    InspectionPhotoView(
-      assetPath: 'assets/demo/sample_photo_1.jpg',
-      caption: 'Axle overview',
-      sectionTitle: 'Visual Inspection',
-      itemLabel: 'Axle Housing',
-      capturedAt: DateTime(2026, 7, 1, 8, 45),
-    ),
-    InspectionPhotoView(
-      assetPath: 'assets/demo/sample_photo_2.jpg',
-      caption: 'Planetary hub evidence',
-      sectionTitle: 'Planetary Hub Inspection',
-      itemLabel: 'Wheel Bearings',
-      capturedAt: DateTime(2026, 7, 1, 9, 10),
-    ),
-  ];
+  List<ValidationIssue> _validationIssues = const <ValidationIssue>[];
 
   List<_SectionState> get _sections => MiningAxleTemplate.sections
       .map(
         (section) => _SectionState(
           section.key,
           section.title,
-          section.sortOrder < 2
-              ? SectionCompletionState.inProgress
-              : SectionCompletionState.notStarted,
+          SectionCompletionState.notStarted,
         ),
       )
       .toList(growable: false);
@@ -85,66 +87,50 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
       penStrokeWidth: 3,
       penColor: CtsPalette.orange,
       exportBackgroundColor: Colors.white,
-    );
+    )..addListener(_handleSignatureChanged);
     _keys = {for (final section in _sections) section.key: GlobalKey()};
 
-    final seed = widget.seed;
-    _customer = TextEditingController(text: seed?.customer ?? 'Moraine Quarry');
-    _site = TextEditingController(text: seed?.siteLocation ?? 'East Pit');
-    _equipmentMake = TextEditingController(text: 'Caterpillar');
-    _equipmentModel = TextEditingController(text: seed?.assetName ?? '793F');
-    _machineSerial = TextEditingController(text: 'CAT793-1001');
-    _axleManufacturer = TextEditingController(text: 'Dana');
-    _axleModel = TextEditingController(text: 'Spicer 53R300');
-    _axleSerial = TextEditingController(text: 'AXLE-1001');
-    _hours = TextEditingController(text: '18450');
-    _inspector = TextEditingController(
-      text: seed?.technicianName ?? 'R. Ellis',
-    );
-    _purchaseOrder = TextEditingController(
-      text: seed?.customerReference ?? 'PO-7788',
-    );
-    _relatedReport = TextEditingController(text: '20260701-0001');
-    _findingDetails = TextEditingController(
-      text: 'No abnormal findings selected.',
-    );
-    _recommendation = TextEditingController(
-      text: 'Continue routine monitoring at next planned service interval.',
-    );
-    _reviewNotes = TextEditingController(
-      text:
-          'Autosaved locally. PDF generation and share handoff remain offline.',
-    );
+    _customer = TextEditingController();
+    _workOrder = TextEditingController();
+    _site = TextEditingController();
+    _equipmentMake = TextEditingController();
+    _equipmentModel = TextEditingController();
+    _machineSerial = TextEditingController();
+    _axleManufacturer = TextEditingController();
+    _axleModel = TextEditingController();
+    _axleSerial = TextEditingController();
+    _hours = TextEditingController();
+    _inspector = TextEditingController();
+    _servicingShop = TextEditingController();
+    _purchaseOrder = TextEditingController();
+    _relatedReport = TextEditingController();
+    _sampleNumber = TextEditingController();
+    _findingDetails = TextEditingController();
+    _recommendation = TextEditingController();
+    _reviewNotes = TextEditingController();
 
-    for (final item in <MiningAxleItem>[
-      ...MiningAxleTemplate.visualConditionItems,
-      ...MiningAxleTemplate.planetaryHubItems,
-      ...MiningAxleTemplate.differentialConditionItems.where(
-        (item) => item.rule == MiningAxleResponseRule.condition,
-      ),
-    ]) {
-      _answers[item.itemKey] = 'Good';
+    final initialRecord = widget.initialRecord;
+    if (initialRecord == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          unawaited(_loadRecord());
+        }
+      });
+    } else {
+      _record = initialRecord.clone();
+      _applyRecord(_record!);
+      _loadingRecord = false;
     }
-    for (final item in <MiningAxleItem>[
-      ...MiningAxleTemplate.visualDefectItems,
-      ...MiningAxleTemplate.lubricationItems.where(
-        (item) => item.rule == MiningAxleResponseRule.defect,
-      ),
-    ]) {
-      _answers[item.itemKey] = 'No';
-    }
-    _answers['oil_condition'] = 'Good';
-    _answers['backlash_measurement'] = 'Acceptable';
-    _answers['differential_lock'] = 'Operational';
-    _answers['health_reliability_risk'] = 'Low';
-    _answers['health_overall_condition'] = 'Good';
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
-    _signatureController.dispose();
+    _signatureController
+      ..removeListener(_handleSignatureChanged)
+      ..dispose();
     _customer.dispose();
+    _workOrder.dispose();
     _site.dispose();
     _equipmentMake.dispose();
     _equipmentModel.dispose();
@@ -154,8 +140,10 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
     _axleSerial.dispose();
     _hours.dispose();
     _inspector.dispose();
+    _servicingShop.dispose();
     _purchaseOrder.dispose();
     _relatedReport.dispose();
+    _sampleNumber.dispose();
     _findingDetails.dispose();
     _recommendation.dispose();
     _reviewNotes.dispose();
@@ -164,7 +152,14 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final issues = _buildIssues();
+    if (_loadingRecord) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_record == null) {
+      return const Center(child: Text('Inspection record was not found.'));
+    }
+
+    final issues = _visibleIssueMessages();
     return LayoutBuilder(
       builder: (context, constraints) {
         final showRail = constraints.maxWidth >= 1120;
@@ -188,9 +183,12 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _Banner(
-                      isEdit: widget.seed != null,
+                      isEdit: widget.inspectionId != null,
+                      documentNumber: _record!.documentNumber,
+                      isSaving: _saving,
+                      onSaveDraft: _saveDraft,
                       onGeneratePdf: _notifyPdf,
-                      onComplete: _showCompleteDialog,
+                      onComplete: _completeInspection,
                     ),
                     const SizedBox(height: 18),
                     _purposeSection(),
@@ -244,6 +242,7 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
       children: [
         _fieldGrid(<_TextFieldSpec>[
           _TextFieldSpec(_customer, 'Customer'),
+          _TextFieldSpec(_workOrder, 'Work Order Number'),
           _TextFieldSpec(_site, 'Site'),
           _TextFieldSpec(_equipmentMake, 'Equipment Make'),
           _TextFieldSpec(_equipmentModel, 'Equipment Model'),
@@ -253,6 +252,7 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
           _TextFieldSpec(_axleSerial, 'Axle Serial Number'),
           _TextFieldSpec(_hours, 'Hours on Machine'),
           _TextFieldSpec(_inspector, 'CTS Inspector'),
+          _TextFieldSpec(_servicingShop, 'Servicing Shop'),
           _TextFieldSpec(_purchaseOrder, 'Purchase Order Number'),
           _TextFieldSpec(_relatedReport, 'Related Machine Report Reference'),
         ]),
@@ -292,7 +292,9 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
           (item) => _optionRow(item, MiningAxleTemplate.defectOptions),
         ),
         const SizedBox(height: 12),
-        PhotoGrid(photos: _photos.take(1).toList(growable: false)),
+        PhotoGrid(
+          photos: _photosForSection(MiningAxleTemplate.visualInspection),
+        ),
       ],
     ),
   );
@@ -308,7 +310,11 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
               ? _optionRow(item, MiningAxleTemplate.conditionOptions)
               : item.rule == MiningAxleResponseRule.defect
               ? _optionRow(item, MiningAxleTemplate.defectOptions)
-              : TextField(decoration: InputDecoration(labelText: item.label)),
+              : TextField(
+                  onChanged: (value) => _answers[item.itemKey] = value,
+                  controller: _sampleNumber,
+                  decoration: InputDecoration(labelText: item.label),
+                ),
         const SizedBox(height: 12),
         _simpleTable(
           headers: const ['Parameter', 'Result', 'Limits'],
@@ -345,7 +351,9 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
         for (final item in MiningAxleTemplate.planetaryHubItems)
           _optionRow(item, MiningAxleTemplate.conditionOptions),
         const SizedBox(height: 12),
-        PhotoGrid(photos: _photos.skip(1).take(1).toList(growable: false)),
+        PhotoGrid(
+          photos: _photosForSection(MiningAxleTemplate.planetaryHubInspection),
+        ),
       ],
     ),
   );
@@ -422,15 +430,11 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
     subtitle: 'Priority 1/2/3 recommendations can be edited before PDF output.',
     child: Column(
       children: [
-        for (final bucket in MiningAxleTemplate.recommendationBuckets)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: TextField(
-              controller: _recommendation,
-              maxLines: 2,
-              decoration: InputDecoration(labelText: bucket),
-            ),
-          ),
+        TextField(
+          controller: _recommendation,
+          maxLines: 3,
+          decoration: const InputDecoration(labelText: 'Recommendation'),
+        ),
       ],
     ),
   );
@@ -448,18 +452,19 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
           'health_reliability_risk',
           'Reliability Risk',
           MiningAxleTemplate.reliabilityRiskOptions,
+          defaultValue: 'Low',
         ),
         _dropdownField(
           'health_overall_condition',
           'Overall Condition',
           MiningAxleTemplate.overallConditionOptions,
+          defaultValue: 'Good',
         ),
       ],
     ),
   );
 
   Widget _reviewSection(List<String> issues) => SectionCard(
-    key: _keys['review'],
     title: 'Review Summary',
     subtitle:
         'Completion blockers, evidence, PDF/share/export actions, and signoff.',
@@ -478,17 +483,16 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
               text: '${_photos.length} photos',
               color: CtsPalette.info,
             ),
-            const StatusChip(
-              text: 'Autosaved locally',
-              color: CtsPalette.slate,
-            ),
+            const StatusChip(text: 'Saved to SQLite', color: CtsPalette.slate),
           ],
         ),
         const SizedBox(height: 12),
-        for (final issue in issues) ...[
+        for (final issue in issues.take(8)) ...[
           _IssueTile(issue),
           const SizedBox(height: 8),
         ],
+        if (issues.length > 8)
+          _IssueTile('${issues.length - 8} more completion issue(s).'),
         CheckboxListTile(
           value: _criticalAcknowledged,
           onChanged: (value) =>
@@ -521,17 +525,22 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
           runSpacing: 12,
           children: [
             FilledButton.icon(
-              onPressed: _notifyPdf,
+              onPressed: _saving ? null : _saveDraft,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Save Draft'),
+            ),
+            FilledButton.icon(
+              onPressed: _saving ? null : _notifyPdf,
               icon: const Icon(Icons.picture_as_pdf_outlined),
               label: const Text('Generate PDF'),
             ),
             OutlinedButton.icon(
-              onPressed: _notifyExport,
+              onPressed: _saving ? null : _notifyExport,
               icon: const Icon(Icons.archive_outlined),
               label: const Text('Export Bundle'),
             ),
             OutlinedButton.icon(
-              onPressed: _showCompleteDialog,
+              onPressed: _saving ? null : _completeInspection,
               icon: const Icon(Icons.verified_outlined),
               label: const Text('Complete inspection'),
             ),
@@ -542,7 +551,7 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
   );
 
   Widget _optionRow(MiningAxleItem item, List<String> options) {
-    final value = _answers[item.itemKey] ?? options.first;
+    final value = _answerValue(item, options);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -550,7 +559,12 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
         children: [
           Expanded(
             flex: 2,
-            child: _dropdownField(item.itemKey, item.label, options),
+            child: _dropdownField(
+              item.itemKey,
+              item.label,
+              options,
+              defaultValue: _defaultValueFor(item, options),
+            ),
           ),
           const SizedBox(width: 12),
           const Expanded(
@@ -560,7 +574,7 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
               maxLines: 1,
             ),
           ),
-          if (value == 'Poor' || value == 'Yes') ...[
+          if (_requiresEvidenceBadge(item, value)) ...[
             const SizedBox(width: 12),
             const StatusChip(
               text: 'Evidence required',
@@ -572,10 +586,16 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
     );
   }
 
-  Widget _dropdownField(String key, String label, List<String> options) {
-    final value = _answers[key] ?? options.first;
+  Widget _dropdownField(
+    String key,
+    String label,
+    List<String> options, {
+    String? defaultValue,
+  }) {
+    final fallback = defaultValue ?? options.first;
+    final value = _answers[key] ?? fallback;
     return DropdownButtonFormField<String>(
-      initialValue: options.contains(value) ? value : options.first,
+      initialValue: options.contains(value) ? value : fallback,
       decoration: InputDecoration(labelText: label),
       items: options
           .map((option) => DropdownMenuItem(value: option, child: Text(option)))
@@ -591,6 +611,7 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
 
   Widget _scoreRow(String label) {
     final key = label.toLowerCase().replaceAll(' ', '_');
+    final value = double.tryParse(_answers[key] ?? '8') ?? 8;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -599,11 +620,11 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
           SizedBox(
             width: 220,
             child: Slider(
-              value: double.tryParse(_answers[key] ?? '8') ?? 8,
+              value: value,
               min: 0,
               max: 10,
               divisions: 10,
-              label: (_answers[key] ?? '8'),
+              label: value.round().toString(),
               onChanged: (value) {
                 setState(() => _answers[key] = value.round().toString());
               },
@@ -680,38 +701,205 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
     },
   );
 
-  void _jumpTo(String key) {
-    final target = _keys[key]?.currentContext;
-    if (target != null) {
-      Scrollable.ensureVisible(
-        target,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
-        alignment: 0.05,
+  Future<void> _loadRecord() async {
+    try {
+      final workspace = ref.read(workspaceProvider);
+      final record = widget.inspectionId == null
+          ? await workspace.createInspectionRecord()
+          : await workspace.inspectionRecordById(widget.inspectionId!);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _record = record;
+        if (record != null) {
+          _applyRecord(record);
+        }
+        _loadingRecord = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _loadingRecord = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to open inspection: $error')),
       );
     }
   }
 
-  void _notifyPdf() {
+  void _applyRecord(InspectionRecord record) {
+    _customer.text = record.customer;
+    _workOrder.text = record.workOrderNumber;
+    _site.text = record.siteLocation;
+    _equipmentMake.text = record.equipmentMake;
+    _equipmentModel.text = record.equipmentModel;
+    _machineSerial.text = record.machineSerialNumber;
+    _axleManufacturer.text = record.axleManufacturer;
+    _axleModel.text = record.axleModel;
+    _axleSerial.text = record.axleSerialNumber;
+    _hours.text = record.hoursOnMachine;
+    _inspector.text = record.technicianName;
+    _servicingShop.text = record.servicingShop;
+    _purchaseOrder.text = record.purchaseOrderNumber;
+    _relatedReport.text = record.relatedMachineReportDocumentNumber;
+    _reviewNotes.text = record.finalTechComments;
+    _criticalAcknowledged = record.criticalAcknowledged;
+    _signed = (record.signatureFilePath ?? '').trim().isNotEmpty;
+
+    _answers
+      ..clear()
+      ..addEntries(
+        record.responses.map(
+          (response) => MapEntry(response.itemKey, response.value ?? ''),
+        ),
+      );
+    _sampleNumber.text = _answers['sample_no'] ?? '';
+    _selectedPurposes
+      ..clear()
+      ..addAll(
+        record.responses
+            .where(
+              (response) =>
+                  response.sectionKey == MiningAxleTemplate.inspectionPurpose &&
+                  MiningAxleTemplate.isTruthy(response.value),
+            )
+            .map((response) => response.itemKey),
+      );
+    _selectedFindings
+      ..clear()
+      ..addAll(
+        record.responses
+            .where(
+              (response) =>
+                  response.sectionKey ==
+                      MiningAxleTemplate.conditionMonitoringFindingsSection &&
+                  MiningAxleTemplate.isTruthy(response.value),
+            )
+            .map((response) => response.itemKey),
+      );
+    _findingDetails.text =
+        record
+            .responseByKey(
+              MiningAxleTemplate.conditionMonitoringFindingsSection,
+              InspectionValidator.conditionMonitoringDetailsKey,
+            )
+            ?.value ??
+        '';
+    _recommendation.text = record.recommendationRows.isEmpty
+        ? ''
+        : record.recommendationRows.first.recommendation;
+    _recordPhotos
+      ..clear()
+      ..addAll(record.photos);
+    _refreshPhotoViews();
+  }
+
+  Future<InspectionRecord?> _saveDraft({bool showMessage = true}) async {
+    if (_record == null || _saving) {
+      return _record;
+    }
+    setState(() => _saving = true);
+    try {
+      final draft = _draftFromForm();
+      await ref.read(workspaceProvider).saveInspectionRecord(draft);
+      if (!mounted) {
+        return draft;
+      }
+      setState(() {
+        _record = draft.clone();
+        _validationIssues = InspectionValidator.validateForCompletion(
+          draft,
+        ).issues;
+      });
+      if (showMessage) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Draft ${draft.documentNumber} saved locally.'),
+          ),
+        );
+      }
+      return draft;
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  Future<void> _notifyPdf() async {
+    await _saveDraft(showMessage: false);
+    if (!mounted) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('PDF regenerated locally for this report.')),
+      const SnackBar(content: Text('PDF data saved locally for generation.')),
     );
   }
 
-  void _notifyExport() {
+  Future<void> _notifyExport() async {
+    final record = await _saveDraft(showMessage: false);
+    if (record == null) {
+      return;
+    }
+    final result = await ref
+        .read(backupServiceProvider)
+        .exportInspection(
+          data: InspectionBackupData(
+            inspectionJson: record.toJson(),
+            documentNumber: record.documentNumber,
+            customer: record.customer,
+            workOrderNumber: record.workOrderNumber,
+            axleSerialNumber: record.axleSerialNumber,
+            machineSerialNumber: record.machineSerialNumber,
+            photoFiles: record.photos
+                .map((photo) => File(photo.filePath))
+                .toList(),
+            generatedPdfFile: record.generatedPdfPath == null
+                ? null
+                : File(record.generatedPdfPath!),
+          ),
+        );
+    if (!mounted) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Inspection bundle exported locally.')),
+      SnackBar(
+        content: Text(
+          'Inspection bundle exported to ${result.archiveFile.path}',
+        ),
+      ),
     );
   }
 
-  void _showCompleteDialog() {
-    setState(() => _signed = true);
+  Future<void> _completeInspection() async {
+    if (_record == null || _saving) {
+      return;
+    }
+    final draft = _draftFromForm();
+    final validation = InspectionValidator.validateForCompletion(draft);
+    if (!validation.isValid) {
+      setState(() => _validationIssues = validation.issues);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Complete blocked by ${validation.issues.length} validation issue(s).',
+          ),
+        ),
+      );
+      return;
+    }
+
+    await _saveDraft(showMessage: false);
+    if (!mounted) {
+      return;
+    }
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Complete inspection'),
         content: const Text(
-          'Completion validates required fields, evidence, action items, health assessment, and signatures before PDF/share handoff.',
+          'Inspection validated, signed, and saved locally as complete.',
         ),
         actions: [
           TextButton(
@@ -723,35 +911,342 @@ class _InspectionFormScreenState extends State<InspectionFormScreen> {
     );
   }
 
-  List<String> _buildIssues() {
-    final issues = <String>[];
-    if (_selectedPurposes.isEmpty) {
-      issues.add('At least one inspection purpose is required.');
+  InspectionRecord _draftFromForm() {
+    final source = _record!;
+    final draft = source.clone();
+    final now = DateTime.now();
+    final signatureCaptured = _signed || _signatureController.isNotEmpty;
+
+    draft
+      ..customer = _customer.text.trim()
+      ..workOrderNumber = _workOrder.text.trim()
+      ..siteLocation = _site.text.trim()
+      ..equipmentMake = _equipmentMake.text.trim()
+      ..equipmentModel = _equipmentModel.text.trim()
+      ..machineSerialNumber = _machineSerial.text.trim()
+      ..axleManufacturer = _axleManufacturer.text.trim()
+      ..axleModel = _axleModel.text.trim()
+      ..axleSerialNumber = _axleSerial.text.trim()
+      ..hoursOnMachine = _hours.text.trim()
+      ..technicianName = _inspector.text.trim()
+      ..servicingShop = _servicingShop.text.trim()
+      ..purchaseOrderNumber = _purchaseOrder.text.trim()
+      ..relatedMachineReportDocumentNumber = _relatedReport.text.trim()
+      ..assetName = _assetNameFromForm()
+      ..finalTechComments = _reviewNotes.text.trim()
+      ..criticalAcknowledged = _criticalAcknowledged
+      ..signatureFilePath = signatureCaptured
+          ? (draft.signatureFilePath ?? 'signature://${draft.id}')
+          : null
+      ..responses = _responsesFor(draft, now)
+      ..photos = List<InspectionPhoto>.of(_recordPhotos)
+      ..recommendationRows = _recommendation.text.trim().isEmpty
+          ? <RecommendationRow>[]
+          : <RecommendationRow>[
+              RecommendationRow(
+                priority: 'Priority 3 Monitor',
+                recommendation: _recommendation.text.trim(),
+              ),
+            ];
+    return draft;
+  }
+
+  List<InspectionResponse> _responsesFor(InspectionRecord draft, DateTime now) {
+    final responses = <InspectionResponse>[];
+
+    void addResponse(
+      String sectionKey,
+      String itemKey,
+      String label,
+      String value, {
+      InspectionFieldType fieldType = InspectionFieldType.dropdown,
+      ConditionRating? conditionRating,
+      bool isFlagged = false,
+    }) {
+      responses.add(
+        InspectionResponse(
+          id: '${draft.id}_${sectionKey}_$itemKey',
+          inspectionId: draft.id,
+          sectionKey: sectionKey,
+          itemKey: itemKey,
+          itemLabel: label,
+          fieldType: fieldType,
+          value: value,
+          conditionRating: conditionRating,
+          isFlagged: isFlagged,
+          createdAt: draft.createdAt,
+          updatedAt: now,
+        ),
+      );
     }
-    if (_customer.text.trim().isEmpty) {
-      issues.add('Customer is required.');
+
+    for (final purpose in MiningAxleTemplate.purposeItems) {
+      addResponse(
+        purpose.sectionKey,
+        purpose.itemKey,
+        purpose.label,
+        _selectedPurposes.contains(purpose.itemKey) ? 'true' : 'false',
+        fieldType: InspectionFieldType.toggle,
+      );
     }
-    if (_axleSerial.text.trim().isEmpty) {
-      issues.add('Axle Serial Number is required.');
+
+    for (final item in <MiningAxleItem>[
+      ...MiningAxleTemplate.visualConditionItems,
+      ...MiningAxleTemplate.visualDefectItems,
+      ...MiningAxleTemplate.lubricationItems,
+      ...MiningAxleTemplate.differentialConditionItems,
+      ...MiningAxleTemplate.planetaryHubItems,
+    ]) {
+      final options = _optionsFor(item);
+      final value = item.rule == MiningAxleResponseRule.text
+          ? (item.itemKey == 'sample_no'
+                    ? _sampleNumber.text
+                    : (_answers[item.itemKey] ?? ''))
+                .trim()
+          : _answerValue(item, options);
+      final rating = _conditionRatingFor(item, value);
+      addResponse(
+        item.sectionKey,
+        item.itemKey,
+        item.label,
+        value,
+        fieldType: item.rule == MiningAxleResponseRule.text
+            ? InspectionFieldType.text
+            : InspectionFieldType.dropdown,
+        conditionRating: rating,
+        isFlagged: _isFlagged(item, value, rating),
+      );
     }
-    if (!_criticalAcknowledged && _selectedFindings.isNotEmpty) {
-      issues.add('Critical / Out of Service acknowledgement may be required.');
+
+    for (final finding in MiningAxleTemplate.conditionMonitoringFindings) {
+      addResponse(
+        finding.sectionKey,
+        finding.itemKey,
+        finding.label,
+        _selectedFindings.contains(finding.itemKey) ? 'true' : 'false',
+        fieldType: InspectionFieldType.toggle,
+      );
     }
-    if (!_signed) {
-      issues.add('Drawn inspector signature is required.');
+    addResponse(
+      MiningAxleTemplate.conditionMonitoringFindingsSection,
+      InspectionValidator.conditionMonitoringDetailsKey,
+      'Condition Monitoring Details',
+      _findingDetails.text.trim(),
+      fieldType: InspectionFieldType.multilineText,
+    );
+    addResponse(
+      MiningAxleTemplate.overallHealth,
+      InspectionValidator.healthMechanicalConditionKey,
+      'Mechanical Condition',
+      _answers[InspectionValidator.healthMechanicalConditionKey] ?? '8',
+      fieldType: InspectionFieldType.number,
+    );
+    addResponse(
+      MiningAxleTemplate.overallHealth,
+      InspectionValidator.healthLubricationConditionKey,
+      'Lubrication Condition',
+      _answers[InspectionValidator.healthLubricationConditionKey] ?? '8',
+      fieldType: InspectionFieldType.number,
+    );
+    addResponse(
+      MiningAxleTemplate.overallHealth,
+      InspectionValidator.healthContaminationControlKey,
+      'Contamination Control',
+      _answers[InspectionValidator.healthContaminationControlKey] ?? '8',
+      fieldType: InspectionFieldType.number,
+    );
+    addResponse(
+      MiningAxleTemplate.overallHealth,
+      InspectionValidator.healthReliabilityRiskKey,
+      'Reliability Risk',
+      _answers[InspectionValidator.healthReliabilityRiskKey] ?? 'Low',
+    );
+    addResponse(
+      MiningAxleTemplate.overallHealth,
+      InspectionValidator.healthOverallConditionKey,
+      'Overall Condition',
+      _answers[InspectionValidator.healthOverallConditionKey] ?? 'Good',
+      conditionRating: _overallConditionRating(
+        _answers[InspectionValidator.healthOverallConditionKey] ?? 'Good',
+      ),
+    );
+    return responses;
+  }
+
+  List<String> _visibleIssueMessages() {
+    if (_record == null) {
+      return const <String>[];
     }
-    return issues;
+    final issues = _validationIssues.isEmpty
+        ? InspectionValidator.validateForCompletion(_draftFromForm()).issues
+        : _validationIssues;
+    return issues.map((issue) => issue.message).toList(growable: false);
+  }
+
+  List<InspectionPhotoView> _photosForSection(String sectionKey) {
+    return _photos
+        .where(
+          (photo) =>
+              photo.sectionTitle ==
+              MiningAxleTemplate.sectionTitleFor(sectionKey),
+        )
+        .toList(growable: false);
+  }
+
+  void _refreshPhotoViews() {
+    _photos
+      ..clear()
+      ..addAll(_recordPhotos.map(_photoView));
+  }
+
+  InspectionPhotoView _photoView(InspectionPhoto photo) {
+    final item = MiningAxleTemplate.itemByKey(photo.sectionKey, photo.itemKey);
+    return InspectionPhotoView(
+      assetPath: photo.filePath,
+      isAsset: false,
+      caption: (photo.caption ?? '').trim().isEmpty
+          ? 'Inspection photo'
+          : photo.caption!.trim(),
+      sectionTitle: MiningAxleTemplate.sectionTitleFor(photo.sectionKey),
+      itemLabel: item?.label ?? photo.itemKey,
+      capturedAt: photo.capturedAt,
+    );
+  }
+
+  List<String> _optionsFor(MiningAxleItem item) {
+    return switch (item.rule) {
+      MiningAxleResponseRule.condition => MiningAxleTemplate.conditionOptions,
+      MiningAxleResponseRule.defect => MiningAxleTemplate.defectOptions,
+      MiningAxleResponseRule.acceptable => MiningAxleTemplate.acceptableOptions,
+      MiningAxleResponseRule.operational =>
+        MiningAxleTemplate.operationalOptions,
+      _ => const <String>[],
+    };
+  }
+
+  String _answerValue(MiningAxleItem item, List<String> options) {
+    return _answers[item.itemKey] ?? _defaultValueFor(item, options);
+  }
+
+  String _defaultValueFor(MiningAxleItem item, List<String> options) {
+    return switch (item.rule) {
+      MiningAxleResponseRule.defect => 'No',
+      MiningAxleResponseRule.acceptable => 'Acceptable',
+      MiningAxleResponseRule.operational => 'Operational',
+      MiningAxleResponseRule.condition => 'Good',
+      _ => '',
+    };
+  }
+
+  bool _requiresEvidenceBadge(MiningAxleItem item, String value) {
+    return switch (item.rule) {
+      MiningAxleResponseRule.condition =>
+        value == MiningAxleTemplate.poor ||
+            value == MiningAxleTemplate.notInspected,
+      MiningAxleResponseRule.defect =>
+        value == MiningAxleTemplate.yes && item.itemKey != 'oil_sampling_taken',
+      MiningAxleResponseRule.acceptable =>
+        value == MiningAxleTemplate.notAcceptable,
+      MiningAxleResponseRule.operational =>
+        value == MiningAxleTemplate.notOperational,
+      _ => false,
+    };
+  }
+
+  ConditionRating? _conditionRatingFor(MiningAxleItem item, String value) {
+    return switch (item.rule) {
+      MiningAxleResponseRule.condition => switch (value) {
+        MiningAxleTemplate.fair => ConditionRating.monitorAtRisk,
+        MiningAxleTemplate.poor => ConditionRating.unsatisfactory,
+        MiningAxleTemplate.notInspected => ConditionRating.monitorAtRisk,
+        _ => ConditionRating.satisfactory,
+      },
+      MiningAxleResponseRule.defect =>
+        value == MiningAxleTemplate.yes && item.itemKey != 'oil_sampling_taken'
+            ? ConditionRating.monitorAtRisk
+            : null,
+      MiningAxleResponseRule.acceptable =>
+        value == MiningAxleTemplate.notAcceptable
+            ? ConditionRating.unsatisfactory
+            : value == MiningAxleTemplate.notInspected
+            ? ConditionRating.monitorAtRisk
+            : null,
+      MiningAxleResponseRule.operational =>
+        value == MiningAxleTemplate.notOperational
+            ? ConditionRating.unsatisfactory
+            : value == MiningAxleTemplate.notInspected
+            ? ConditionRating.monitorAtRisk
+            : null,
+      _ => null,
+    };
+  }
+
+  bool _isFlagged(
+    MiningAxleItem item,
+    String value,
+    ConditionRating? conditionRating,
+  ) {
+    return (conditionRating?.isFlagged ?? false) ||
+        _requiresEvidenceBadge(item, value);
+  }
+
+  ConditionRating? _overallConditionRating(String value) {
+    return switch (value) {
+      MiningAxleTemplate.fair => ConditionRating.monitorAtRisk,
+      MiningAxleTemplate.poor => ConditionRating.unsatisfactory,
+      _ => null,
+    };
+  }
+
+  String _assetNameFromForm() {
+    final explicit = _record?.assetName.trim() ?? '';
+    if (explicit.isNotEmpty &&
+        explicit !=
+            '${_record?.equipmentMake ?? ''} ${_record?.equipmentModel ?? ''} ${_record?.axleSerialNumber ?? ''}'
+                .trim()) {
+      return explicit;
+    }
+    return <String>[
+      _equipmentMake.text,
+      _equipmentModel.text,
+      _axleSerial.text,
+    ].where((value) => value.trim().isNotEmpty).join(' ').trim();
+  }
+
+  void _handleSignatureChanged() {
+    final signed = _signatureController.isNotEmpty;
+    if (signed != _signed && mounted) {
+      setState(() => _signed = signed);
+    }
+  }
+
+  void _jumpTo(String key) {
+    final target = _keys[key]?.currentContext;
+    if (target != null) {
+      Scrollable.ensureVisible(
+        target,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+        alignment: 0.05,
+      );
+    }
   }
 }
 
 class _Banner extends StatelessWidget {
   const _Banner({
     required this.isEdit,
+    required this.documentNumber,
+    required this.isSaving,
+    required this.onSaveDraft,
     required this.onGeneratePdf,
     required this.onComplete,
   });
 
   final bool isEdit;
+  final String documentNumber;
+  final bool isSaving;
+  final VoidCallback onSaveDraft;
   final VoidCallback onGeneratePdf;
   final VoidCallback onComplete;
 
@@ -773,6 +1268,19 @@ class _Banner extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    StatusChip(
+                      text: documentNumber,
+                      color: CtsPalette.orangeSoft,
+                    ),
+                    if (isSaving)
+                      const StatusChip(text: 'Saving', color: CtsPalette.info),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 Text(
                   isEdit
                       ? 'Edit Mining Axle Inspection'
@@ -784,7 +1292,7 @@ class _Banner extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Landscape tablet workflow for one axle per report with local autosave, evidence, signoff, PDF, share, export, and import handoff.',
+                  'Landscape tablet workflow for one axle per report with local SQLite storage, validation, evidence, signoff, PDF, share, export, and import handoff.',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Colors.white.withValues(alpha: 0.82),
                   ),
@@ -798,12 +1306,17 @@ class _Banner extends StatelessWidget {
             runSpacing: 10,
             children: [
               FilledButton.icon(
-                onPressed: onGeneratePdf,
+                onPressed: isSaving ? null : onSaveDraft,
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('Save Draft'),
+              ),
+              FilledButton.icon(
+                onPressed: isSaving ? null : onGeneratePdf,
                 icon: const Icon(Icons.picture_as_pdf_outlined),
                 label: const Text('Generate PDF'),
               ),
               OutlinedButton.icon(
-                onPressed: onComplete,
+                onPressed: isSaving ? null : onComplete,
                 icon: const Icon(Icons.verified_outlined),
                 label: const Text('Mark complete'),
               ),
@@ -876,7 +1389,7 @@ class _SummaryPanel extends StatelessWidget {
             subtitle: 'Completion blockers.',
             child: Column(
               children: [
-                for (final issue in issues) ...[
+                for (final issue in issues.take(8)) ...[
                   _IssueTile(issue),
                   const SizedBox(height: 8),
                 ],
@@ -928,12 +1441,14 @@ class _IssueTile extends StatelessWidget {
 
 class _TextFieldSpec {
   const _TextFieldSpec(this.controller, this.label);
+
   final TextEditingController controller;
   final String label;
 }
 
 class _SectionState {
   const _SectionState(this.key, this.title, this.status);
+
   final String key;
   final String title;
   final SectionCompletionState status;

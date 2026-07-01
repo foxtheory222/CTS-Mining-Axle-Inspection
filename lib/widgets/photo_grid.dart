@@ -25,32 +25,23 @@ class PhotoGrid extends StatelessWidget {
     if (items.isEmpty) {
       return _EmptyPhotoState(label: emptyLabel, onAddPhoto: onAddPhoto);
     }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth >= 840
-            ? 3
-            : constraints.maxWidth >= 540
-            ? 2
-            : 1;
-        final itemCount = items.length + (showAddTile ? 1 : 0);
-        return GridView.builder(
-          itemCount: itemCount,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisSpacing: 14,
-            crossAxisSpacing: 14,
-            childAspectRatio: 1.08,
-          ),
-          itemBuilder: (context, index) {
-            if (showAddTile && index == itemCount - 1) {
-              return _AddPhotoTile(label: 'Add photo', onAddPhoto: onAddPhoto);
-            }
-            final photo = items[index];
-            return _PhotoCard(photo: photo, index: index + 1);
-          },
-        );
+    final itemCount = items.length + (showAddTile ? 1 : 0);
+    return GridView.builder(
+      itemCount: itemCount,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 250,
+        mainAxisExtent: 236,
+        mainAxisSpacing: 14,
+        crossAxisSpacing: 14,
+      ),
+      itemBuilder: (context, index) {
+        if (showAddTile && index == itemCount - 1) {
+          return _AddPhotoTile(label: 'Add photo', onAddPhoto: onAddPhoto);
+        }
+        final photo = items[index];
+        return _PhotoCard(photo: photo, index: index + 1);
       },
     );
   }
@@ -71,7 +62,7 @@ class _PhotoCard extends StatelessWidget {
           Expanded(
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
+                top: Radius.circular(16),
               ),
               child: Stack(
                 fit: StackFit.expand,
@@ -183,12 +174,12 @@ class _AddPhotoTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         onTap: onAddPhoto,
         child: Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: Theme.of(context).colorScheme.outlineVariant,
             ),
@@ -245,7 +236,7 @@ class _EmptyPhotoState extends StatelessWidget {
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: LayoutBuilder(

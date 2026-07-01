@@ -7,7 +7,7 @@ class SectionCard extends StatelessWidget {
     required this.child,
     this.subtitle,
     this.trailing,
-    this.padding = const EdgeInsets.all(20),
+    this.padding = const EdgeInsets.all(18),
     this.topAccent = true,
   });
 
@@ -29,7 +29,7 @@ class SectionCard extends StatelessWidget {
               top: 0,
               bottom: null,
               child: Container(
-                height: 4,
+                height: 3,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -54,15 +54,21 @@ class SectionCard extends StatelessWidget {
                         children: [
                           Text(
                             title,
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w700),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.15,
+                                ),
                           ),
                           if (subtitle != null) ...[
                             const SizedBox(height: 4),
                             Text(
                               subtitle!,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: scheme.onSurfaceVariant),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                    height: 1.3,
+                                  ),
                             ),
                           ],
                         ],
@@ -74,7 +80,7 @@ class SectionCard extends StatelessWidget {
                     ],
                   ],
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
                 child,
               ],
             ),

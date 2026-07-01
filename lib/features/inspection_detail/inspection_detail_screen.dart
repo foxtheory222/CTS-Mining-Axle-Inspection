@@ -141,10 +141,83 @@ class _DetailHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final info = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            StatusBadge.forInspection(inspection.status),
+            StatusBadge(
+              label: inspection.documentNumber,
+              color: CtsPalette.orangeSoft,
+              icon: Icons.confirmation_number_outlined,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          inspection.customer,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '${inspection.assetName} · ${inspection.workOrderNumber}',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            color: Colors.white.withValues(alpha: 0.78),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _HeaderInfo(label: 'Technician', value: inspection.technicianName),
+            _HeaderInfo(label: 'Site', value: inspection.siteLocation),
+            _HeaderInfo(
+              label: 'Servicing Shop',
+              value: inspection.servicingShop,
+            ),
+            _HeaderInfo(
+              label: 'Updated',
+              value: DateFormat(
+                'MMM d, h:mm a',
+              ).format(inspection.lastUpdatedAt),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final actions = Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        FilledButton.icon(
+          onPressed: onEdit,
+          icon: const Icon(Icons.edit_outlined),
+          label: const Text('Edit'),
+        ),
+        OutlinedButton.icon(
+          onPressed: onDuplicate,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.7)),
+          ),
+          icon: const Icon(Icons.copy_outlined),
+          label: const Text('Duplicate'),
+        ),
+      ],
+    );
+
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(20),
         gradient: const LinearGradient(
           colors: [CtsPalette.navyAlt, CtsPalette.navy, Color(0xFF152947)],
           begin: Alignment.topLeft,
@@ -152,81 +225,23 @@ class _DetailHeader extends StatelessWidget {
         ),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 820) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    StatusBadge.forInspection(inspection.status),
-                    StatusBadge(
-                      label: inspection.documentNumber,
-                      color: CtsPalette.orangeSoft,
-                      icon: Icons.confirmation_number_outlined,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  inspection.customer,
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${inspection.assetName} · ${inspection.workOrderNumber}',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.78),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    _HeaderInfo(
-                      label: 'Technician',
-                      value: inspection.technicianName,
-                    ),
-                    _HeaderInfo(label: 'Site', value: inspection.siteLocation),
-                    _HeaderInfo(
-                      label: 'Servicing Shop',
-                      value: inspection.servicingShop,
-                    ),
-                    _HeaderInfo(
-                      label: 'Updated',
-                      value: DateFormat(
-                        'MMM d, h:mm a',
-                      ).format(inspection.lastUpdatedAt),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 18),
-          Column(
+              children: [info, const SizedBox(height: 16), actions],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              FilledButton.icon(
-                onPressed: onEdit,
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('Edit'),
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: onDuplicate,
-                icon: const Icon(Icons.copy_outlined),
-                label: const Text('Duplicate'),
-              ),
+              Expanded(child: info),
+              const SizedBox(width: 18),
+              actions,
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }

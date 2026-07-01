@@ -7,6 +7,7 @@ import 'package:signature/signature.dart';
 
 import '../../core/constants.dart';
 import '../../core/file_utils.dart';
+import '../../core/layout.dart';
 import '../../core/mining_axle_template.dart';
 import '../../core/theme.dart';
 import '../../core/validators.dart';
@@ -164,64 +165,78 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     final issues = _visibleIssueMessages();
     return LayoutBuilder(
       builder: (context, constraints) {
-        final showRail = constraints.maxWidth >= 1120;
-        final showSummary = constraints.maxWidth >= 1350;
+        final showRail = constraints.maxWidth >= Breakpoints.formRail;
+        final showSummary = constraints.maxWidth >= Breakpoints.formSummary;
+        final form = SingleChildScrollView(
+          controller: _scrollController,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _Banner(
+                isEdit: widget.inspectionId != null,
+                documentNumber: _record!.documentNumber,
+                isSaving: _saving,
+                onSaveDraft: _saveDraft,
+                onGeneratePdf: _notifyPdf,
+                onComplete: _completeInspection,
+              ),
+              const SizedBox(height: 16),
+              _purposeSection(),
+              const SizedBox(height: 16),
+              _visualSection(),
+              const SizedBox(height: 16),
+              _lubricationSection(),
+              const SizedBox(height: 16),
+              _differentialSection(),
+              const SizedBox(height: 16),
+              _planetarySection(),
+              const SizedBox(height: 16),
+              _measurementSection(),
+              const SizedBox(height: 16),
+              _temperatureSection(),
+              const SizedBox(height: 16),
+              _findingsSection(),
+              const SizedBox(height: 16),
+              _recommendationsSection(),
+              const SizedBox(height: 16),
+              _healthSection(),
+              const SizedBox(height: 16),
+              _reviewSection(issues),
+            ],
+          ),
+        );
+
+        // Constrain the reading column so fields never stretch edge-to-edge on
+        // very wide tablets when the side panels are not shown.
+        final centeredForm = showSummary
+            ? form
+            : Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: Breakpoints.readableColumn,
+                  ),
+                  child: form,
+                ),
+              );
+
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (showRail) ...[
               SizedBox(
-                width: 250,
+                width: 236,
                 child: SingleChildScrollView(
                   child: _SectionRail(sections: _sections, onJump: _jumpTo),
                 ),
               ),
-              const SizedBox(width: 18),
+              const SizedBox(width: 16),
             ],
-            Expanded(
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _Banner(
-                      isEdit: widget.inspectionId != null,
-                      documentNumber: _record!.documentNumber,
-                      isSaving: _saving,
-                      onSaveDraft: _saveDraft,
-                      onGeneratePdf: _notifyPdf,
-                      onComplete: _completeInspection,
-                    ),
-                    const SizedBox(height: 18),
-                    _purposeSection(),
-                    const SizedBox(height: 18),
-                    _visualSection(),
-                    const SizedBox(height: 18),
-                    _lubricationSection(),
-                    const SizedBox(height: 18),
-                    _differentialSection(),
-                    const SizedBox(height: 18),
-                    _planetarySection(),
-                    const SizedBox(height: 18),
-                    _measurementSection(),
-                    const SizedBox(height: 18),
-                    _temperatureSection(),
-                    const SizedBox(height: 18),
-                    _findingsSection(),
-                    const SizedBox(height: 18),
-                    _recommendationsSection(),
-                    const SizedBox(height: 18),
-                    _healthSection(),
-                    const SizedBox(height: 18),
-                    _reviewSection(issues),
-                  ],
-                ),
-              ),
-            ),
+            Expanded(child: centeredForm),
             if (showSummary) ...[
-              const SizedBox(width: 18),
+              const SizedBox(width: 16),
               SizedBox(
-                width: 360,
+                width: 340,
                 child: _SummaryPanel(
                   issues: issues,
                   photos: _photos,
@@ -557,35 +572,48 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
 
   Widget _optionRow(MiningAxleItem item, List<String> options) {
     final value = _answerValue(item, options);
+    final needsEvidence = _requiresEvidenceBadge(item, value);
+    final dropdown = _dropdownField(
+      item.itemKey,
+      item.label,
+      options,
+      defaultValue: _defaultValueFor(item, options),
+    );
+    const comments = TextField(
+      decoration: InputDecoration(labelText: 'Comments'),
+      maxLines: 1,
+    );
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            flex: 2,
-            child: _dropdownField(
-              item.itemKey,
-              item.label,
-              options,
-              defaultValue: _defaultValueFor(item, options),
+          if (needsEvidence)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: StatusChip(
+                text: 'Evidence required',
+                color: CtsPalette.orange,
+              ),
             ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < Breakpoints.stackRow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [dropdown, const SizedBox(height: 10), comments],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 5, child: dropdown),
+                  const SizedBox(width: 12),
+                  const Expanded(flex: 6, child: comments),
+                ],
+              );
+            },
           ),
-          const SizedBox(width: 12),
-          const Expanded(
-            flex: 3,
-            child: TextField(
-              decoration: InputDecoration(labelText: 'Comments'),
-              maxLines: 1,
-            ),
-          ),
-          if (_requiresEvidenceBadge(item, value)) ...[
-            const SizedBox(width: 12),
-            const StatusChip(
-              text: 'Evidence required',
-              color: CtsPalette.orange,
-            ),
-          ],
         ],
       ),
     );
@@ -644,64 +672,136 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     required List<String> headers,
     required List<String> rows,
   }) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: Row(
+    final scheme = Theme.of(context).colorScheme;
+    final valueHeaders = headers.sublist(1);
+    final headerStyle = Theme.of(context).textTheme.labelLarge?.copyWith(
+      fontWeight: FontWeight.w800,
+      color: scheme.onSurfaceVariant,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Narrow: render each row as a stacked, labelled card so long
+        // measurement names never get squeezed into a quarter-width cell.
+        if (constraints.maxWidth < 720) {
+          return Column(
             children: [
-              for (final header in headers)
-                Expanded(
-                  child: Text(
-                    header,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
+              for (var r = 0; r < rows.length; r++)
+                Container(
+                  margin: EdgeInsets.only(
+                    bottom: r == rows.length - 1 ? 0 : 10,
+                  ),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        rows[r],
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      for (var i = 0; i < valueHeaders.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 8),
+                        TextField(
+                          decoration: InputDecoration(
+                            labelText: valueHeaders[i],
+                            isDense: true,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
             ],
-          ),
-        ),
-        for (final row in rows)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(
-              children: [
-                Expanded(child: Text(row)),
-                for (var i = 1; i < headers.length; i++) ...[
-                  const SizedBox(width: 8),
-                  const Expanded(child: TextField()),
+          );
+        }
+        // Wide: aligned columns with a generous label column and evenly
+        // weighted value columns.
+        return Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: Text(headers.first, style: headerStyle),
+                  ),
+                  for (final header in valueHeaders) ...[
+                    const SizedBox(width: 12),
+                    Expanded(flex: 4, child: Text(header, style: headerStyle)),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-      ],
+            for (final row in rows)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 12,
+                ),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: scheme.outlineVariant),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      flex: 5,
+                      child: Text(
+                        row,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                    for (var i = 0; i < valueHeaders.length; i++) ...[
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        flex: 4,
+                        child: TextField(
+                          decoration: InputDecoration(isDense: true),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
   Widget _fieldGrid(List<_TextFieldSpec> fields) => LayoutBuilder(
     builder: (context, constraints) {
-      final columns = constraints.maxWidth >= 1100
-          ? 3
-          : constraints.maxWidth >= 760
-          ? 2
-          : 1;
-      return GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: fields.length,
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: columns,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: columns == 1 ? 3.0 : 2.5,
-        ),
-        itemBuilder: (context, index) {
-          final field = fields[index];
-          return TextField(
-            controller: field.controller,
-            decoration: InputDecoration(labelText: field.label),
-          );
-        },
+      const spacing = 12.0;
+      final columns = fieldColumnsForWidth(constraints.maxWidth);
+      final itemWidth = gridItemWidth(constraints.maxWidth, columns, spacing);
+      return Wrap(
+        spacing: spacing,
+        runSpacing: 12,
+        children: [
+          for (final field in fields)
+            SizedBox(
+              width: itemWidth,
+              child: TextField(
+                controller: field.controller,
+                decoration: InputDecoration(labelText: field.label),
+              ),
+            ),
+        ],
       );
     },
   );
@@ -1392,77 +1492,91 @@ class _Banner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            StatusChip(text: documentNumber, color: CtsPalette.orangeSoft),
+            if (isSaving)
+              const StatusChip(text: 'Saving', color: CtsPalette.info),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          isEdit ? 'Edit Mining Axle Inspection' : 'New Mining Axle Inspection',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'One axle per report — local storage, validation, evidence, '
+          'signoff, PDF, share, and export.',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Colors.white.withValues(alpha: 0.8),
+            height: 1.35,
+          ),
+        ),
+      ],
+    );
+
+    final actions = Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        FilledButton.icon(
+          onPressed: isSaving ? null : onSaveDraft,
+          icon: const Icon(Icons.save_outlined),
+          label: const Text('Save Draft'),
+        ),
+        FilledButton.icon(
+          onPressed: isSaving ? null : onGeneratePdf,
+          icon: const Icon(Icons.picture_as_pdf_outlined),
+          label: const Text('Generate PDF'),
+        ),
+        OutlinedButton.icon(
+          onPressed: isSaving ? null : onComplete,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.7)),
+          ),
+          icon: const Icon(Icons.verified_outlined),
+          label: const Text('Mark complete'),
+        ),
+      ],
+    );
+
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(20),
         gradient: const LinearGradient(
           colors: [CtsPalette.navyAlt, CtsPalette.navy, Color(0xFF132944)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 900) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    StatusChip(
-                      text: documentNumber,
-                      color: CtsPalette.orangeSoft,
-                    ),
-                    if (isSaving)
-                      const StatusChip(text: 'Saving', color: CtsPalette.info),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  isEdit
-                      ? 'Edit Mining Axle Inspection'
-                      : 'New Mining Axle Inspection',
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Landscape tablet workflow for one axle per report with local SQLite storage, validation, evidence, signoff, PDF, share, export, and import handoff.',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.82),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 18),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
+              children: [heading, const SizedBox(height: 16), actions],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              FilledButton.icon(
-                onPressed: isSaving ? null : onSaveDraft,
-                icon: const Icon(Icons.save_outlined),
-                label: const Text('Save Draft'),
-              ),
-              FilledButton.icon(
-                onPressed: isSaving ? null : onGeneratePdf,
-                icon: const Icon(Icons.picture_as_pdf_outlined),
-                label: const Text('Generate PDF'),
-              ),
-              OutlinedButton.icon(
-                onPressed: isSaving ? null : onComplete,
-                icon: const Icon(Icons.verified_outlined),
-                label: const Text('Mark complete'),
-              ),
+              Expanded(child: heading),
+              const SizedBox(width: 18),
+              actions,
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }

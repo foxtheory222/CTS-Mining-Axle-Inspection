@@ -101,10 +101,92 @@ class _HeroBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(26),
+    final intro = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Mining Axle Dashboard',
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Fast access to draft, in-progress, complete, and emailed '
+          'inspections from a clean tablet layout built for field work.',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Colors.white.withValues(alpha: 0.82),
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            FilledButton.icon(
+              onPressed: onNewInspection,
+              icon: const Icon(Icons.add),
+              label: const Text('New Inspection'),
+            ),
+            OutlinedButton.icon(
+              onPressed: onOpenInspections,
+              style: _heroOutlinedButtonStyle(),
+              icon: const Icon(Icons.search),
+              label: const Text('Browse Inspections'),
+            ),
+            OutlinedButton.icon(
+              onPressed: onOpenActions,
+              style: _heroOutlinedButtonStyle(),
+              icon: const Icon(Icons.assignment_turned_in_outlined),
+              label: const Text('Action Items'),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final focus = Container(
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Current focus',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: Colors.white70,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const StatusBadge(
+            label: 'Critical reports require LOTO acknowledgement',
+            color: CtsPalette.danger,
+            icon: Icons.warning_amber_rounded,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'All records stay on-device. PDF export, share, and email handoff '
+            'are available without an online workflow.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Colors.white.withValues(alpha: 0.78),
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -112,91 +194,23 @@ class _HeroBanner extends StatelessWidget {
         ),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 980) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Mining Axle Dashboard',
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Fast access to draft, in-progress, complete, and emailed inspections from a clean tablet layout built for field work.',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.82),
-                    height: 1.35,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: onNewInspection,
-                      icon: const Icon(Icons.add),
-                      label: const Text('New Inspection'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: onOpenInspections,
-                      style: _heroOutlinedButtonStyle(),
-                      icon: const Icon(Icons.search),
-                      label: const Text('Browse Inspections'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: onOpenActions,
-                      style: _heroOutlinedButtonStyle(),
-                      icon: const Icon(Icons.assignment_turned_in_outlined),
-                      label: const Text('Action Items'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 24),
-          Container(
-            width: 280,
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Current focus',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Colors.white70,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                const StatusBadge(
-                  label: 'Critical reports require LOTO acknowledgement',
-                  color: CtsPalette.danger,
-                  icon: Icons.warning_amber_rounded,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'All records stay on-device. PDF export, share, and email handoff are available without an online workflow.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.78),
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+              children: [intro, const SizedBox(height: 18), focus],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: intro),
+              const SizedBox(width: 20),
+              SizedBox(width: 300, child: focus),
+            ],
+          );
+        },
       ),
     );
   }

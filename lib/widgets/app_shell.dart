@@ -35,12 +35,7 @@ class AppShell extends ConsumerWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final wide = constraints.maxWidth >= 1240;
-              final medium = constraints.maxWidth >= 960;
-              final railWidth = wide
-                  ? 252.0
-                  : medium
-                  ? 90.0
-                  : 80.0;
+              final railWidth = wide ? 244.0 : 116.0;
               return Row(
                 children: [
                   SizedBox(
@@ -64,7 +59,7 @@ class AppShell extends ConsumerWidget {
                         ),
                         Expanded(
                           child: Padding(
-                            padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                             child: child,
                           ),
                         ),
@@ -89,91 +84,129 @@ class _TopStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Container(
-      margin: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      margin: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final compact = constraints.maxWidth < 860;
-          final titleBlock = Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.04),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.asset(
-                    'assets/logo/cts_logo.png',
-                    width: compact ? 150 : 250,
-                    height: compact ? 48 : 76,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                if (!compact) ...[
-                  const SizedBox(height: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        AppConstants.appName,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Offline tablet workflow for mining axle inspection reports',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: scheme.onSurfaceVariant.withValues(alpha: 0.9),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          );
+          final showSubtitle = constraints.maxWidth >= 900;
+          final brand = _BrandBlock(showSubtitle: showSubtitle);
+          final statusPills = _StatusPills(metricValue: metricValue);
 
-          final statusPills = Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            alignment: compact ? WrapAlignment.start : WrapAlignment.end,
+          if (constraints.maxWidth < 700) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [brand, const SizedBox(height: 12), statusPills],
+            );
+          }
+          return Row(
             children: [
-              _TopStatusPill(
-                icon: Icons.sync,
-                label: 'Local data only',
-                color: CtsPalette.orange,
-              ),
-              _TopStatusPill(
-                icon: Icons.lock_outline,
-                label: 'Offline ready',
-                color: CtsPalette.success,
-              ),
-              _TopStatusPill(
-                icon: Icons.list_alt_rounded,
-                label: '$metricValue total records',
-                color: CtsPalette.info,
+              Expanded(child: brand),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: statusPills,
+                ),
               ),
             ],
           );
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [titleBlock, const SizedBox(height: 12), statusPills],
-          );
         },
       ),
+    );
+  }
+}
+
+class _BrandBlock extends StatelessWidget {
+  const _BrandBlock({required this.showSubtitle});
+
+  final bool showSubtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Image.asset(
+            'assets/logo/cts_logo.png',
+            height: 34,
+            fit: BoxFit.contain,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                AppConstants.appName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (showSubtitle) ...[
+                const SizedBox(height: 2),
+                Text(
+                  'Offline mining axle inspection workflow',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.9),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatusPills extends StatelessWidget {
+  const _StatusPills({required this.metricValue});
+
+  final String metricValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      alignment: WrapAlignment.end,
+      children: [
+        _TopStatusPill(
+          icon: Icons.sync,
+          label: 'Local data only',
+          color: CtsPalette.orange,
+        ),
+        _TopStatusPill(
+          icon: Icons.lock_outline,
+          label: 'Offline ready',
+          color: CtsPalette.success,
+        ),
+        _TopStatusPill(
+          icon: Icons.list_alt_rounded,
+          label: '$metricValue records',
+          color: CtsPalette.info,
+        ),
+      ],
     );
   }
 }
@@ -192,7 +225,7 @@ class _TopStatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
@@ -201,11 +234,11 @@ class _TopStatusPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 8),
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
           Text(
             label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: Colors.white,
               fontWeight: FontWeight.w700,
             ),
@@ -234,65 +267,84 @@ class _SidebarRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(18, 0, 12, 18),
+      margin: extended
+          ? const EdgeInsets.fromLTRB(16, 0, 12, 16)
+          : const EdgeInsets.fromLTRB(8, 0, 6, 12),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(extended ? 24 : 20),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: const BoxDecoration(
-                    color: CtsPalette.orange,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Inspection Suite',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
+          if (extended)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: const BoxDecoration(
+                      color: CtsPalette.orange,
+                      shape: BoxShape.circle,
                     ),
                   ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Inspection Suite',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: 16, bottom: 6),
+              child: Container(
+                width: 12,
+                height: 12,
+                decoration: const BoxDecoration(
+                  color: CtsPalette.orange,
+                  shape: BoxShape.circle,
                 ),
-              ],
+              ),
             ),
-          ),
           Expanded(
             child: NavigationRail(
               extended: extended,
               selectedIndex: selectedIndex,
               onDestinationSelected: onDestinationSelected,
               labelType: extended ? null : NavigationRailLabelType.all,
+              minWidth: 100,
+              groupAlignment: -0.85,
               leading: const SizedBox(height: 2),
-              trailing: Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Column(
-                  children: [
-                    _RailHint(
-                      icon: Icons.today_outlined,
-                      title: 'Active',
-                      value: totalRecords.toString(),
-                    ),
-                    const SizedBox(height: 8),
-                    _RailHint(
-                      icon: Icons.warning_amber_rounded,
-                      title: 'Critical',
-                      value: criticalRecords.toString(),
-                      tint: CtsPalette.danger,
-                    ),
-                  ],
-                ),
-              ),
+              trailing: extended
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Column(
+                        children: [
+                          _RailHint(
+                            icon: Icons.today_outlined,
+                            title: 'Active',
+                            value: totalRecords.toString(),
+                          ),
+                          const SizedBox(height: 8),
+                          _RailHint(
+                            icon: Icons.warning_amber_rounded,
+                            title: 'Critical',
+                            value: criticalRecords.toString(),
+                            tint: CtsPalette.danger,
+                          ),
+                        ],
+                      ),
+                    )
+                  : null,
               destinations: const [
                 NavigationRailDestination(
                   icon: Icon(Icons.space_dashboard_outlined),
@@ -322,18 +374,21 @@ class _SidebarRail extends StatelessWidget {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Landscape tablet layout with large touch targets and high-contrast controls.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.66),
+          if (extended)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Landscape tablet layout with large touch targets and high-contrast controls.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.66),
+                  ),
                 ),
               ),
-            ),
-          ),
+            )
+          else
+            const SizedBox(height: 8),
         ],
       ),
     );

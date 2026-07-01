@@ -114,8 +114,8 @@ class _TopStrip extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   child: Image.asset(
                     'assets/logo/cts_logo.png',
-                    width: compact ? 108 : 136,
-                    height: compact ? 46 : 58,
+                    width: compact ? 150 : 250,
+                    height: compact ? 48 : 76,
                     fit: BoxFit.contain,
                   ),
                 ),

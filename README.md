@@ -31,11 +31,12 @@ CTS Mining Axle Inspection is an offline-only Flutter tablet application for Com
 - Local file storage for photos, signatures, PDFs, and export bundles
 
 ## Assets
-- `assets/logo/cts_logo.png` is the Combined Technical Services report/header logo.
-- `assets/logo/cts_app_icon.png` is the source preview for generated Android launcher icons.
+- `assets/logo/cts_mark_source.png` is the generated CTS-style emblem source.
+- `assets/logo/cts_logo.png` is the rendered Combined Technical Services report/header logo.
+- `assets/logo/cts_app_icon.png` is the rendered source preview for Android launcher icons.
 - `assets/demo/sample_photo_1.jpg` and `assets/demo/sample_photo_2.jpg` are local sample media assets.
 - Fonts are stored locally under `assets/fonts/`.
-- Run `dart run tool/generate_android_icons.dart` after replacing the CTS logo source.
+- Run `python tool/render_cts_brand_assets.py` after replacing the CTS mark source.
 
 ## Local Setup
 1. Install the Flutter stable SDK.

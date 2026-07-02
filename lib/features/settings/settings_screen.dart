@@ -161,60 +161,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
-class _SettingsPanel extends StatefulWidget {
+class _SettingsPanel extends StatelessWidget {
   const _SettingsPanel();
-
-  @override
-  State<_SettingsPanel> createState() => _SettingsPanelState();
-}
-
-class _SettingsPanelState extends State<_SettingsPanel> {
-  bool _lockLandscape = true;
-  bool _compressImages = true;
-  bool _saveRecipients = true;
-  bool _useBrandedTheme = true;
 
   @override
   Widget build(BuildContext context) {
     return SectionCard(
-      title: 'Workflow Preferences',
-      subtitle: 'These settings align the UI to the current V1 tablet scope.',
-      child: Column(
+      title: 'Workflow Scope',
+      subtitle: 'Fixed V1 behavior for this offline tablet app.',
+      child: const Column(
         children: [
-          SwitchListTile(
-            value: _lockLandscape,
-            onChanged: (value) => setState(() => _lockLandscape = value),
-            title: const Text('Lock landscape mode'),
-            subtitle: const Text('Keep the UI optimized for 10-inch tablets.'),
-            activeThumbColor: CtsPalette.orange,
+          _InfoRow(label: 'Display mode', value: 'Responsive tablet layout'),
+          _InfoRow(label: 'Image handling', value: 'Local report-ready files'),
+          _InfoRow(
+            label: 'Email recipients',
+            value: 'Saved locally during share handoff',
           ),
-          SwitchListTile(
-            value: _compressImages,
-            onChanged: (value) => setState(() => _compressImages = value),
-            title: const Text('Compress images for report output'),
-            subtitle: const Text(
-              'Keeps PDFs readable without unnecessary file size.',
-            ),
-            activeThumbColor: CtsPalette.orange,
-          ),
-          SwitchListTile(
-            value: _saveRecipients,
-            onChanged: (value) => setState(() => _saveRecipients = value),
-            title: const Text('Save recent email recipients'),
-            subtitle: const Text(
-              'Recent addresses stay available for handoff workflows.',
-            ),
-            activeThumbColor: CtsPalette.orange,
-          ),
-          SwitchListTile(
-            value: _useBrandedTheme,
-            onChanged: (value) => setState(() => _useBrandedTheme = value),
-            title: const Text('Use branded industrial theme'),
-            subtitle: const Text(
-              'Deep navy, slate, and safety orange palette.',
-            ),
-            activeThumbColor: CtsPalette.orange,
-          ),
+          _InfoRow(label: 'Theme', value: 'CTS branded industrial theme'),
         ],
       ),
     );

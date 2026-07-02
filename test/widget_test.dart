@@ -69,6 +69,25 @@ void main() {
     expect(find.text('Backup and Restore'), findsOneWidget);
     expect(find.textContaining('Fluid Power'), findsNothing);
   });
+
+  testWidgets('settings does not expose inert workflow preference switches', (
+    WidgetTester tester,
+  ) async {
+    final scope = await _testAppScope();
+    addTearDown(() => _disposeScope(tester, scope));
+    await tester.binding.setSurfaceSize(const Size(1600, 1000));
+    addTearDown(() async => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(scope.wrap(const CtsMiningAxleInspectionApp()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(find.byType(SwitchListTile), findsNothing);
+    expect(find.text('Workflow Preferences'), findsNothing);
+    expect(find.text('Workflow Scope'), findsOneWidget);
+  });
 }
 
 Future<_TestAppScope> _testAppScope() async {

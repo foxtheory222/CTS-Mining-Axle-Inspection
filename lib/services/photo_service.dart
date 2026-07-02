@@ -11,7 +11,7 @@ import '../core/constants.dart';
 import '../core/file_utils.dart';
 import '../data/models/inspection_models.dart';
 
-enum PhotoInputSource { camera, gallery, sampleOne, sampleTwo }
+enum PhotoInputSource { camera, gallery }
 
 enum ManagedPhotoSource { camera, gallery, sampleAsset, imported }
 
@@ -436,10 +436,6 @@ class PhotoService {
           return null;
         }
         return galleryFiles.first.readAsBytes();
-      case PhotoInputSource.sampleOne:
-        return _readAsset(AppConstants.samplePhotoAssetOne);
-      case PhotoInputSource.sampleTwo:
-        return _readAsset(AppConstants.samplePhotoAssetTwo);
     }
   }
 
@@ -478,11 +474,6 @@ class PhotoService {
       originalFileName: originalFileName,
       byteLength: outputBytes.length,
     );
-  }
-
-  Future<Uint8List> _readAsset(String assetPath) async {
-    final ByteData data = await _assetBundle.load(assetPath);
-    return data.buffer.asUint8List();
   }
 
   Uint8List _compressToJpeg(Uint8List rawBytes) {

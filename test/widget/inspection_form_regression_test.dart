@@ -1,11 +1,29 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:cts_mining_axle_inspection/core/mining_axle_template.dart';
+import 'package:cts_mining_axle_inspection/core/workspace_controller.dart';
+import 'package:cts_mining_axle_inspection/core/workspace_models.dart';
+import 'package:cts_mining_axle_inspection/core/workspace_providers.dart';
 import 'package:cts_mining_axle_inspection/data/models/inspection_enums.dart';
 import 'package:cts_mining_axle_inspection/data/models/inspection_models.dart';
+import 'package:cts_mining_axle_inspection/data/repositories/inspection_repository.dart';
 import 'package:cts_mining_axle_inspection/features/inspection_form/inspection_form_screen.dart';
+import 'package:cts_mining_axle_inspection/services/document_number_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import '../support/persistence_test_helpers.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() {
+    sqfliteFfiInit();
+  });
+
   testWidgets(
     'new inspection form starts from a blank record and exposes real draft save',
     (tester) async {
@@ -29,6 +47,194 @@ void main() {
       expect(find.widgetWithText(FilledButton, 'Save Draft'), findsWidgets);
     },
   );
+
+  testWidgets('photo source sheet exposes only real device sources', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1600, 1000));
+    addTearDown(() async => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: InspectionFormScreen(initialRecord: _blankInspection()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final addPhotoButton = find.widgetWithText(FilledButton, 'Add first photo');
+    await tester.ensureVisible(addPhotoButton.first);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(addPhotoButton.first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Camera'), findsOneWidget);
+    expect(find.text('Gallery'), findsOneWidget);
+    expect(find.text('Sample photo'), findsNothing);
+  });
+
+  testWidgets('row comments and table inputs persist after save and reload', (
+    tester,
+  ) async {
+    final tempDir = Directory.systemTemp.createTempSync(
+      'inspection_form_persistence_',
+    );
+    final database = TestAppDatabase(tempDir);
+    final repository = InspectionRepository(
+      database: database,
+      documentNumberService: DocumentNumberService(),
+    );
+    final workspace = _TrackingWorkspaceController(repository: repository);
+    addTearDown(() async {
+      await database.close();
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
+      }
+    });
+    final initial = _blankInspection();
+
+    await tester.binding.setSurfaceSize(const Size(1600, 1400));
+    addTearDown(() async => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(database),
+          workspaceProvider.overrideWith((ref) => workspace),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: InspectionFormScreen(initialRecord: initial)),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    await _enterKeyedText(
+      tester,
+      const Key('comment_axle_housing'),
+      'Axle housing scuffed near left mount',
+    );
+    await _enterKeyedText(
+      tester,
+      const Key('oil_result_iso_cleanliness_code'),
+      '18/16/13',
+    );
+    await _enterKeyedText(
+      tester,
+      const Key('oil_limits_iso_cleanliness_code'),
+      'Within CTS target',
+    );
+    await _enterKeyedText(
+      tester,
+      const Key('measurement_specification_crown_wheel_backlash'),
+      '0.30-0.45 mm',
+    );
+    await _enterKeyedText(
+      tester,
+      const Key('measurement_actual_crown_wheel_backlash'),
+      '0.39 mm',
+    );
+    await _enterKeyedText(
+      tester,
+      const Key('measurement_comments_crown_wheel_backlash'),
+      'Pattern acceptable',
+    );
+    final thermographySwitch = find.byKey(
+      const Key('thermography_performed_switch'),
+    );
+    await tester.ensureVisible(thermographySwitch);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(thermographySwitch);
+    await tester.pump(const Duration(milliseconds: 100));
+    await _enterKeyedText(
+      tester,
+      const Key('temperature_temperature_c_left_planetary_hub'),
+      '72.5',
+    );
+    await _enterKeyedText(
+      tester,
+      const Key('temperature_comments_left_planetary_hub'),
+      'Stable after haul cycle',
+    );
+
+    final saveButton = find.widgetWithText(FilledButton, 'Save Draft').last;
+    final savedFuture = workspace.nextSavedInspection;
+    await tester.ensureVisible(saveButton);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(saveButton);
+    await tester.pump();
+    final draftFromButton = await tester.runAsync<InspectionRecord>(
+      () => savedFuture.timeout(const Duration(seconds: 5)),
+    );
+    expect(draftFromButton, isNotNull);
+    final saved = await tester.runAsync<InspectionRecord>(() async {
+      await repository.saveInspection(draftFromButton!);
+      final persisted = await repository.getInspection(initial.id);
+      if (persisted == null) {
+        throw StateError('Inspection ${initial.id} was not persisted.');
+      }
+      return persisted;
+    });
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(saved, isNotNull);
+    expect(
+      saved!
+          .responseByKey(MiningAxleTemplate.visualInspection, 'axle_housing')
+          ?.comment,
+      'Axle housing scuffed near left mount',
+    );
+    expect(saved.oilAnalysisRows.single.parameter, 'ISO Cleanliness Code');
+    expect(saved.oilAnalysisRows.single.result, '18/16/13');
+    expect(saved.oilAnalysisRows.single.limits, 'Within CTS target');
+    expect(
+      saved.mechanicalMeasurementRows.single.measurement,
+      'Crown Wheel Backlash',
+    );
+    expect(
+      saved.mechanicalMeasurementRows.single.specification,
+      '0.30-0.45 mm',
+    );
+    expect(saved.mechanicalMeasurementRows.single.actual, '0.39 mm');
+    expect(
+      saved.mechanicalMeasurementRows.single.comments,
+      'Pattern acceptable',
+    );
+    expect(saved.temperatureRows.single.location, 'Left Planetary Hub');
+    expect(saved.temperatureRows.single.temperatureC, 72.5);
+    expect(saved.temperatureRows.single.comments, 'Stable after haul cycle');
+    expect(
+      saved
+          .responseByKey(
+            MiningAxleTemplate.temperatureAssessment,
+            'thermography_performed',
+          )
+          ?.value,
+      'true',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(database),
+          workspaceProvider.overrideWith((ref) => workspace),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: InspectionFormScreen(initialRecord: saved)),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(
+      _editableTextWithValue('Axle housing scuffed near left mount'),
+      findsOneWidget,
+    );
+    expect(_editableTextWithValue('18/16/13'), findsOneWidget);
+    expect(_editableTextWithValue('0.39 mm'), findsOneWidget);
+    expect(_editableTextWithValue('72.5'), findsOneWidget);
+  });
 }
 
 InspectionRecord _blankInspection() {
@@ -59,5 +265,73 @@ Finder _editableTextWithValue(String value) {
   return find.byWidgetPredicate(
     (widget) => widget is EditableText && widget.controller.text == value,
     description: 'EditableText with value "$value"',
+  );
+}
+
+Future<void> _enterKeyedText(WidgetTester tester, Key key, String value) async {
+  final finder = find.byKey(key);
+  await tester.ensureVisible(finder);
+  await tester.pump(const Duration(milliseconds: 100));
+  await tester.enterText(finder, value);
+  await tester.pump(const Duration(milliseconds: 50));
+}
+
+class _TrackingWorkspaceController extends AppWorkspaceController {
+  _TrackingWorkspaceController({required super.repository});
+
+  Completer<InspectionRecord>? _saveCompleter;
+
+  Future<InspectionRecord> get nextSavedInspection {
+    _saveCompleter = Completer<InspectionRecord>();
+    return _saveCompleter!.future;
+  }
+
+  @override
+  Future<void> refresh() async {}
+
+  @override
+  Future<InspectionSummary> saveInspectionRecord(
+    InspectionRecord inspection,
+  ) async {
+    final saved = inspection.clone();
+    _saveCompleter?.complete(saved);
+    _saveCompleter = null;
+    return _summaryFor(saved);
+  }
+
+  @override
+  Future<InspectionRecord?> inspectionRecordById(String id) async {
+    return null;
+  }
+}
+
+InspectionSummary _summaryFor(InspectionRecord record) {
+  return InspectionSummary(
+    id: record.id,
+    documentNumber: record.documentNumber,
+    customer: record.customer,
+    workOrderNumber: record.workOrderNumber,
+    customerReference: record.customerReference,
+    assetName: record.assetName,
+    siteLocation: record.siteLocation,
+    technicianName: record.technicianName,
+    servicingShop: record.servicingShop,
+    inspectionDateTime: record.inspectionDateTime,
+    createdAt: record.createdAt,
+    status: record.status,
+    sections: const <InspectionSectionView>[],
+    actionItems: const <InspectionActionItemView>[],
+    photos: const <InspectionPhotoView>[],
+    flaggedCount: record.flaggedItemCount,
+    atRiskCount: record.atRiskCount,
+    unsatisfactoryCount: record.unsatisfactoryCount,
+    criticalCount: record.criticalCount,
+    photoCount: record.photoCount,
+    lastUpdatedAt: record.updatedAt,
+    completedAt: record.completedAt,
+    emailedAt: record.emailedAt,
+    finalTechComments: record.finalTechComments,
+    criticalAcknowledged: record.criticalAcknowledged,
+    generatedPdfPath: record.generatedPdfPath,
   );
 }

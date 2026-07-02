@@ -59,6 +59,10 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
   late final TextEditingController _reviewNotes;
 
   final Map<String, String> _answers = <String, String>{};
+  final Map<String, TextEditingController> _commentControllers =
+      <String, TextEditingController>{};
+  final Map<String, TextEditingController> _tableControllers =
+      <String, TextEditingController>{};
   final Set<String> _selectedPurposes = <String>{};
   final Set<String> _selectedFindings = <String>{};
   final List<InspectionPhoto> _recordPhotos = <InspectionPhoto>[];
@@ -150,6 +154,12 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     _findingDetails.dispose();
     _recommendation.dispose();
     _reviewNotes.dispose();
+    for (final controller in _commentControllers.values) {
+      controller.dispose();
+    }
+    for (final controller in _tableControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -335,6 +345,7 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
                 ),
         const SizedBox(height: 12),
         _simpleTable(
+          tableKey: 'oil',
           headers: const ['Parameter', 'Result', 'Limits'],
           rows: MiningAxleTemplate.oilAnalysisParameters,
         ),
@@ -383,6 +394,7 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     title: 'Mechanical Measurements',
     subtitle: 'Specifications and actual values are free text for V1.',
     child: _simpleTable(
+      tableKey: 'measurement',
       headers: const ['Measurement', 'Specification', 'Actual', 'Comments'],
       rows: MiningAxleTemplate.mechanicalMeasurements,
     ),
@@ -395,12 +407,14 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     child: Column(
       children: [
         SwitchListTile(
+          key: const Key('thermography_performed_switch'),
           value: _thermographyPerformed,
           onChanged: (value) => setState(() => _thermographyPerformed = value),
           title: const Text('Performed Using Infrared Thermography'),
           activeThumbColor: CtsPalette.orange,
         ),
         _simpleTable(
+          tableKey: 'temperature',
           headers: const ['Location', 'Temperature C', 'Comments'],
           rows: MiningAxleTemplate.temperatureLocations,
         ),
@@ -573,14 +587,17 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
   Widget _optionRow(MiningAxleItem item, List<String> options) {
     final value = _answerValue(item, options);
     final needsEvidence = _requiresEvidenceBadge(item, value);
+    final commentController = _commentControllerFor(item.itemKey);
     final dropdown = _dropdownField(
       item.itemKey,
       item.label,
       options,
       defaultValue: _defaultValueFor(item, options),
     );
-    const comments = TextField(
-      decoration: InputDecoration(labelText: 'Comments'),
+    final comments = TextField(
+      key: Key('comment_${item.itemKey}'),
+      controller: commentController,
+      decoration: const InputDecoration(labelText: 'Comments'),
       maxLines: 1,
     );
     return Padding(
@@ -609,7 +626,7 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
                 children: [
                   Expanded(flex: 5, child: dropdown),
                   const SizedBox(width: 12),
-                  const Expanded(flex: 6, child: comments),
+                  Expanded(flex: 6, child: comments),
                 ],
               );
             },
@@ -669,6 +686,7 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
   }
 
   Widget _simpleTable({
+    required String tableKey,
     required List<String> headers,
     required List<String> rows,
   }) {
@@ -708,6 +726,16 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
                       for (var i = 0; i < valueHeaders.length; i++) ...[
                         if (i > 0) const SizedBox(height: 8),
                         TextField(
+                          key: _tableFieldKey(
+                            tableKey,
+                            valueHeaders[i],
+                            rows[r],
+                          ),
+                          controller: _tableControllerFor(
+                            tableKey,
+                            rows[r],
+                            valueHeaders[i],
+                          ),
                           decoration: InputDecoration(
                             labelText: valueHeaders[i],
                             isDense: true,
@@ -768,10 +796,16 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
                     ),
                     for (var i = 0; i < valueHeaders.length; i++) ...[
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         flex: 4,
                         child: TextField(
-                          decoration: InputDecoration(isDense: true),
+                          key: _tableFieldKey(tableKey, valueHeaders[i], row),
+                          controller: _tableControllerFor(
+                            tableKey,
+                            row,
+                            valueHeaders[i],
+                          ),
+                          decoration: const InputDecoration(isDense: true),
                         ),
                       ),
                     ],
@@ -859,7 +893,20 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
           (response) => MapEntry(response.itemKey, response.value ?? ''),
         ),
       );
+    for (final item in _commentedItems) {
+      _commentControllerFor(item.itemKey).text =
+          record.responseByKey(item.sectionKey, item.itemKey)?.comment ?? '';
+    }
     _sampleNumber.text = _answers['sample_no'] ?? '';
+    _thermographyPerformed = MiningAxleTemplate.isTruthy(
+      record
+          .responseByKey(
+            MiningAxleTemplate.temperatureAssessment,
+            _thermographyPerformedKey,
+          )
+          ?.value,
+    );
+    _applyTableRows(record);
     _selectedPurposes
       ..clear()
       ..addAll(
@@ -1076,6 +1123,9 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
           : null
       ..responses = _responsesFor(draft, now)
       ..photos = List<InspectionPhoto>.of(_recordPhotos)
+      ..oilAnalysisRows = _oilAnalysisRowsFromForm()
+      ..mechanicalMeasurementRows = _mechanicalRowsFromForm()
+      ..temperatureRows = _temperatureRowsFromForm()
       ..recommendationRows = _recommendation.text.trim().isEmpty
           ? <RecommendationRow>[]
           : <RecommendationRow>[
@@ -1098,6 +1148,7 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       InspectionFieldType fieldType = InspectionFieldType.dropdown,
       ConditionRating? conditionRating,
       bool isFlagged = false,
+      String? comment,
     }) {
       responses.add(
         InspectionResponse(
@@ -1110,6 +1161,7 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
           value: value,
           conditionRating: conditionRating,
           isFlagged: isFlagged,
+          comment: comment,
           createdAt: draft.createdAt,
           updatedAt: now,
         ),
@@ -1151,8 +1203,17 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
             : InspectionFieldType.dropdown,
         conditionRating: rating,
         isFlagged: _isFlagged(item, value, rating),
+        comment: _trimmedCommentFor(item.itemKey),
       );
     }
+
+    addResponse(
+      MiningAxleTemplate.temperatureAssessment,
+      _thermographyPerformedKey,
+      'Performed Using Infrared Thermography',
+      _thermographyPerformed ? 'true' : 'false',
+      fieldType: InspectionFieldType.toggle,
+    );
 
     for (final finding in MiningAxleTemplate.conditionMonitoringFindings) {
       addResponse(
@@ -1207,6 +1268,163 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       ),
     );
     return responses;
+  }
+
+  static const String _thermographyPerformedKey = 'thermography_performed';
+
+  List<MiningAxleItem> get _commentedItems => <MiningAxleItem>[
+    ...MiningAxleTemplate.visualConditionItems,
+    ...MiningAxleTemplate.visualDefectItems,
+    ...MiningAxleTemplate.lubricationItems.where(
+      (item) => item.rule != MiningAxleResponseRule.text,
+    ),
+    ...MiningAxleTemplate.differentialConditionItems,
+    ...MiningAxleTemplate.planetaryHubItems,
+  ];
+
+  TextEditingController _commentControllerFor(String itemKey) {
+    return _commentControllers.putIfAbsent(itemKey, TextEditingController.new);
+  }
+
+  String? _trimmedCommentFor(String itemKey) {
+    final value = _commentControllers[itemKey]?.text.trim() ?? '';
+    return value.isEmpty ? null : value;
+  }
+
+  TextEditingController _tableControllerFor(
+    String tableKey,
+    String row,
+    String header,
+  ) {
+    return _tableControllers.putIfAbsent(
+      _tableControllerKey(tableKey, row, header),
+      TextEditingController.new,
+    );
+  }
+
+  Key _tableFieldKey(String tableKey, String header, String row) {
+    return Key('${tableKey}_${_slug(header)}_${_slug(row)}');
+  }
+
+  String _tableValue(String tableKey, String row, String header) {
+    return _tableControllerFor(tableKey, row, header).text.trim();
+  }
+
+  void _setTableValue(
+    String tableKey,
+    String row,
+    String header,
+    String value,
+  ) {
+    _tableControllerFor(tableKey, row, header).text = value;
+  }
+
+  String _tableControllerKey(String tableKey, String row, String header) {
+    return '$tableKey::${_slug(row)}::${_slug(header)}';
+  }
+
+  String _slug(String value) {
+    return value
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+  }
+
+  void _applyTableRows(InspectionRecord record) {
+    for (final row in MiningAxleTemplate.oilAnalysisParameters) {
+      final saved = record.oilAnalysisRows.cast<OilAnalysisRow?>().firstWhere(
+        (entry) => entry?.parameter == row,
+        orElse: () => null,
+      );
+      _setTableValue('oil', row, 'Result', saved?.result ?? '');
+      _setTableValue('oil', row, 'Limits', saved?.limits ?? '');
+    }
+    for (final row in MiningAxleTemplate.mechanicalMeasurements) {
+      final saved = record.mechanicalMeasurementRows
+          .cast<MechanicalMeasurementRow?>()
+          .firstWhere((entry) => entry?.measurement == row, orElse: () => null);
+      _setTableValue(
+        'measurement',
+        row,
+        'Specification',
+        saved?.specification ?? '',
+      );
+      _setTableValue('measurement', row, 'Actual', saved?.actual ?? '');
+      _setTableValue('measurement', row, 'Comments', saved?.comments ?? '');
+    }
+    for (final row in MiningAxleTemplate.temperatureLocations) {
+      final saved = record.temperatureRows.cast<TemperatureRow?>().firstWhere(
+        (entry) => entry?.location == row,
+        orElse: () => null,
+      );
+      _setTableValue(
+        'temperature',
+        row,
+        'Temperature C',
+        saved?.temperatureC?.toString() ?? '',
+      );
+      _setTableValue('temperature', row, 'Comments', saved?.comments ?? '');
+    }
+  }
+
+  List<OilAnalysisRow> _oilAnalysisRowsFromForm() {
+    return MiningAxleTemplate.oilAnalysisParameters
+        .map(
+          (parameter) => OilAnalysisRow(
+            parameter: parameter,
+            result: _tableValue('oil', parameter, 'Result'),
+            limits: _tableValue('oil', parameter, 'Limits'),
+          ),
+        )
+        .where(
+          (row) => row.result.trim().isNotEmpty || row.limits.trim().isNotEmpty,
+        )
+        .toList(growable: false);
+  }
+
+  List<MechanicalMeasurementRow> _mechanicalRowsFromForm() {
+    return MiningAxleTemplate.mechanicalMeasurements
+        .map(
+          (measurement) => MechanicalMeasurementRow(
+            measurement: measurement,
+            specification: _tableValue(
+              'measurement',
+              measurement,
+              'Specification',
+            ),
+            actual: _tableValue('measurement', measurement, 'Actual'),
+            comments: _tableValue('measurement', measurement, 'Comments'),
+          ),
+        )
+        .where(
+          (row) =>
+              row.specification.trim().isNotEmpty ||
+              row.actual.trim().isNotEmpty ||
+              row.comments.trim().isNotEmpty,
+        )
+        .toList(growable: false);
+  }
+
+  List<TemperatureRow> _temperatureRowsFromForm() {
+    return MiningAxleTemplate.temperatureLocations
+        .map((location) {
+          final rawTemperature = _tableValue(
+            'temperature',
+            location,
+            'Temperature C',
+          );
+          return TemperatureRow(
+            location: location,
+            temperatureC: double.tryParse(rawTemperature),
+            comments: _tableValue('temperature', location, 'Comments'),
+            abnormalFlagged: false,
+          );
+        })
+        .where(
+          (row) => row.temperatureC != null || row.comments.trim().isNotEmpty,
+        )
+        .toList(growable: false);
   }
 
   List<String> _visibleIssueMessages() {
@@ -1390,12 +1608,6 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
               leading: const Icon(Icons.photo_library_outlined),
               title: const Text('Gallery'),
               onTap: () => Navigator.of(context).pop(PhotoInputSource.gallery),
-            ),
-            ListTile(
-              leading: const Icon(Icons.science_outlined),
-              title: const Text('Sample photo'),
-              onTap: () =>
-                  Navigator.of(context).pop(PhotoInputSource.sampleOne),
             ),
           ],
         ),

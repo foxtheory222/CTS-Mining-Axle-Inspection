@@ -1,12 +1,16 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
+import 'package:cts_mining_axle_inspection/core/mining_axle_template.dart';
 import 'package:cts_mining_axle_inspection/data/models/inspection_enums.dart';
 import 'package:cts_mining_axle_inspection/data/models/inspection_models.dart';
 import 'package:cts_mining_axle_inspection/data/repositories/inspection_repository.dart';
+import 'package:cts_mining_axle_inspection/features/pdf_report/pdf_report_models.dart';
 import 'package:cts_mining_axle_inspection/services/backup_service.dart';
 import 'package:cts_mining_axle_inspection/services/document_number_service.dart';
 import 'package:cts_mining_axle_inspection/services/email_service.dart';
+import 'package:cts_mining_axle_inspection/services/inspection_report_mapper.dart';
 import 'package:cts_mining_axle_inspection/services/inspection_workflow_service.dart';
 import 'package:cts_mining_axle_inspection/services/pdf_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -82,6 +86,40 @@ void main() {
 
     final persisted = await repository.getInspection(inspection.id);
     expect(persisted?.generatedPdfPath, result.pdfFile.path);
+
+    final reportData = InspectionReportMapper.fromRecord(result.inspection);
+    expect(
+      _reportItem(
+        reportData,
+        MiningAxleTemplate.visualInspection,
+        'Axle Housing',
+      ).comment,
+      'Axle housing scuffed near left mount',
+    );
+    expect(
+      _reportItem(
+        reportData,
+        MiningAxleTemplate.lubricationAssessment,
+        'ISO Cleanliness Code',
+      ).value,
+      '18/16/13',
+    );
+    expect(
+      _reportItem(
+        reportData,
+        MiningAxleTemplate.mechanicalMeasurementsSection,
+        'Crown Wheel Backlash',
+      ).comment,
+      'Specification: 0.30-0.45 mm | Pattern acceptable',
+    );
+    expect(
+      _reportItem(
+        reportData,
+        MiningAxleTemplate.temperatureAssessment,
+        'Left Planetary Hub',
+      ).value,
+      '72.5 C',
+    );
   });
 
   test(
@@ -158,6 +196,43 @@ void main() {
         archive.files.map((file) => file.name),
         contains(startsWith('generated_pdf/')),
       );
+      final exportedInspectionJson = _inspectionJsonFromArchive(archive);
+      expect(
+        _firstJsonRow(
+          exportedInspectionJson,
+          'responses',
+          'itemKey',
+          'axle_housing',
+        )['comment'],
+        'Axle housing scuffed near left mount',
+      );
+      expect(
+        _firstJsonRow(
+          exportedInspectionJson,
+          'oilAnalysisRows',
+          'parameter',
+          'ISO Cleanliness Code',
+        )['result'],
+        '18/16/13',
+      );
+      expect(
+        _firstJsonRow(
+          exportedInspectionJson,
+          'mechanicalMeasurementRows',
+          'measurement',
+          'Crown Wheel Backlash',
+        )['comments'],
+        'Pattern acceptable',
+      );
+      expect(
+        _firstJsonRow(
+          exportedInspectionJson,
+          'temperatureRows',
+          'location',
+          'Left Planetary Hub',
+        )['temperatureC'],
+        72.5,
+      );
 
       final importResult = await backupService.importInspection(
         archiveFile: exportResult.exportResult.archiveFile,
@@ -169,6 +244,15 @@ void main() {
       expect(
         importResult.inspectionJson['generatedPdfPath'],
         importResult.restoredPdfFile!.path,
+      );
+      expect(
+        _firstJsonRow(
+          importResult.inspectionJson,
+          'temperatureRows',
+          'location',
+          'Left Planetary Hub',
+        )['comments'],
+        'Stable after haul cycle',
       );
     },
   );
@@ -230,7 +314,81 @@ InspectionRecord _completeInspection(Directory tempDir) {
     finalTechComments: 'Ready for customer handoff.',
   );
   fillRequiredResponses(inspection);
+  _addDetailInputs(inspection);
   return inspection;
+}
+
+void _addDetailInputs(InspectionRecord inspection) {
+  inspection
+          .responseByKey(MiningAxleTemplate.visualInspection, 'axle_housing')
+          ?.comment =
+      'Axle housing scuffed near left mount';
+  inspection.responses.add(
+    InspectionResponse(
+      id: '${inspection.id}_thermography_performed',
+      inspectionId: inspection.id,
+      sectionKey: MiningAxleTemplate.temperatureAssessment,
+      itemKey: 'thermography_performed',
+      itemLabel: 'Performed Using Infrared Thermography',
+      fieldType: InspectionFieldType.toggle,
+      value: 'true',
+      createdAt: inspection.createdAt,
+      updatedAt: inspection.updatedAt,
+    ),
+  );
+  inspection.oilAnalysisRows = <OilAnalysisRow>[
+    OilAnalysisRow(
+      parameter: 'ISO Cleanliness Code',
+      result: '18/16/13',
+      limits: 'Within CTS target',
+    ),
+  ];
+  inspection.mechanicalMeasurementRows = <MechanicalMeasurementRow>[
+    MechanicalMeasurementRow(
+      measurement: 'Crown Wheel Backlash',
+      specification: '0.30-0.45 mm',
+      actual: '0.39 mm',
+      comments: 'Pattern acceptable',
+    ),
+  ];
+  inspection.temperatureRows = <TemperatureRow>[
+    TemperatureRow(
+      location: 'Left Planetary Hub',
+      temperatureC: 72.5,
+      comments: 'Stable after haul cycle',
+    ),
+  ];
+}
+
+InspectionReportItem _reportItem(
+  InspectionReportData data,
+  String sectionKey,
+  String label,
+) {
+  return data.sections
+      .singleWhere((section) => section.key == sectionKey)
+      .items
+      .singleWhere((item) => item.label == label);
+}
+
+Map<String, dynamic> _inspectionJsonFromArchive(Archive archive) {
+  final entry = archive.files.singleWhere(
+    (file) => file.name == 'inspection.json',
+  );
+  return jsonDecode(utf8.decode(entry.content as List<int>))
+      as Map<String, dynamic>;
+}
+
+Map<String, dynamic> _firstJsonRow(
+  Map<String, dynamic> json,
+  String listKey,
+  String matchKey,
+  String matchValue,
+) {
+  final rows = json[listKey] as List<dynamic>;
+  return rows.cast<Map<String, dynamic>>().firstWhere(
+    (row) => row[matchKey] == matchValue,
+  );
 }
 
 Future<File> _copyAsset(

@@ -29,23 +29,12 @@ void main() {
       await tester.tap(find.text('Settings').last);
       await tester.pumpAndSettle();
 
-      for (final title in <String>[
-        'Lock landscape mode',
-        'Compress images for report output',
-        'Save recent email recipients',
-        'Use branded industrial theme',
-      ]) {
-        final tile = find.widgetWithText(SwitchListTile, title);
-        expect(tile, findsOneWidget);
-        expect(tester.widget<SwitchListTile>(tile).value, isTrue);
-        await tester.tap(tile);
-        await tester.pumpAndSettle();
-        expect(tester.widget<SwitchListTile>(tile).value, isFalse);
-        await tester.tap(tile);
-        await tester.pumpAndSettle();
-        expect(tester.widget<SwitchListTile>(tile).value, isTrue);
-      }
-
+      expect(find.byType(SwitchListTile), findsNothing);
+      expect(find.text('Workflow Scope'), findsOneWidget);
+      expect(find.text('Responsive tablet layout'), findsOneWidget);
+      expect(find.text('Local report-ready files'), findsOneWidget);
+      expect(find.text('Saved locally during share handoff'), findsOneWidget);
+      expect(find.text('CTS branded industrial theme'), findsOneWidget);
       expect(find.text('Template version'), findsOneWidget);
       expect(find.text(MiningAxleTemplate.templateVersion), findsWidgets);
       expect(
@@ -106,6 +95,36 @@ void main() {
         label: 'Overall Condition',
         options: MiningAxleTemplate.overallConditionOptions,
       );
+      await _enterKeyedText(
+        tester,
+        const Key('comment_axle_housing'),
+        'Tablet matrix axle housing note',
+      );
+      await _enterKeyedText(
+        tester,
+        const Key('oil_result_iso_cleanliness_code'),
+        '18/16/13',
+      );
+      await _enterKeyedText(
+        tester,
+        const Key('oil_limits_iso_cleanliness_code'),
+        'Within CTS target',
+      );
+      await _enterKeyedText(
+        tester,
+        const Key('measurement_specification_crown_wheel_backlash'),
+        '0.30-0.45 mm',
+      );
+      await _enterKeyedText(
+        tester,
+        const Key('measurement_actual_crown_wheel_backlash'),
+        '0.39 mm',
+      );
+      await _enterKeyedText(
+        tester,
+        const Key('measurement_comments_crown_wheel_backlash'),
+        'Pattern acceptable',
+      );
 
       await tester.ensureVisible(
         find.text('Performed Using Infrared Thermography'),
@@ -121,6 +140,30 @@ void main() {
       await tester.tap(thermographyTile);
       await tester.pumpAndSettle();
       expect(tester.widget<SwitchListTile>(thermographyTile).value, isFalse);
+      await _enterKeyedText(
+        tester,
+        const Key('temperature_temperature_c_left_planetary_hub'),
+        '72.5',
+      );
+      await _enterKeyedText(
+        tester,
+        const Key('temperature_comments_left_planetary_hub'),
+        'Stable after haul cycle',
+      );
+
+      final addPhotoButton = find.widgetWithText(
+        FilledButton,
+        'Add first photo',
+      );
+      await tester.ensureVisible(addPhotoButton.first);
+      await tester.pumpAndSettle();
+      await tester.tap(addPhotoButton.first);
+      await tester.pumpAndSettle();
+      expect(find.text('Camera'), findsOneWidget);
+      expect(find.text('Gallery'), findsOneWidget);
+      expect(find.text('Sample photo'), findsNothing);
+      Navigator.of(tester.element(find.text('Camera'))).pop();
+      await tester.pumpAndSettle();
 
       for (final finding in MiningAxleTemplate.conditionMonitoringFindings) {
         await _tapFilterChip(tester, finding.label);
@@ -145,21 +188,23 @@ void main() {
 
       await tester.ensureVisible(find.text('Generate PDF').last);
       await tester.tap(find.widgetWithText(FilledButton, 'Generate PDF').last);
-      await tester.pumpAndSettle();
-      expect(
-        find.text('PDF data saved locally for generation.'),
-        findsOneWidget,
-      );
+      await tester.pump();
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(seconds: 2));
+      });
+      await tester.pump();
+      await _waitForTextContaining(tester, 'PDF generated:');
       await tester.pump(const Duration(seconds: 4));
       await tester.pumpAndSettle();
       final exportButton = find.widgetWithText(OutlinedButton, 'Export Bundle');
       await tester.ensureVisible(exportButton);
       await tester.tap(exportButton);
-      await tester.pumpAndSettle();
-      expect(
-        find.textContaining('Inspection bundle exported to'),
-        findsOneWidget,
-      );
+      await tester.pump();
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(seconds: 2));
+      });
+      await tester.pump();
+      await _waitForTextContaining(tester, 'Inspection bundle exported to');
       await tester.pump(const Duration(seconds: 4));
       await tester.pumpAndSettle();
       final completeButton = find.widgetWithText(
@@ -174,6 +219,35 @@ void main() {
       expect(errors, isEmpty);
     },
   );
+}
+
+Future<void> _enterKeyedText(WidgetTester tester, Key key, String value) async {
+  final finder = find.byKey(key);
+  expect(finder, findsOneWidget);
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.enterText(finder, value);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _waitForTextContaining(
+  WidgetTester tester,
+  String pattern, {
+  Duration timeout = const Duration(seconds: 10),
+}) async {
+  final finder = find.textContaining(pattern);
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    await tester.pump(const Duration(milliseconds: 100));
+    if (finder.evaluate().isNotEmpty) {
+      expect(finder, findsWidgets);
+      return;
+    }
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+  }
+  expect(finder, findsWidgets);
 }
 
 Future<void> _tapFilterChip(WidgetTester tester, String label) async {

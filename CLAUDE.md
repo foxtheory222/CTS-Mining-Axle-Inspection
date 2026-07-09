@@ -31,5 +31,7 @@ flutter build apk --release
 ## Claude Code helpers in this repo
 - `/release-check` — run the full release gate against `docs/RELEASE_CHECKLIST.md`.
 - `/new-feature-slice` — scaffold a `lib/features/<name>/` slice with a test.
-- Subagents: `offline-first-reviewer` (guards the offline invariant), `flutter-test-writer` (writes tests in the repo's style).
-- Hooks auto-run `dart format` on save and block TODO markers / `pubspec.lock` edits.
+- `/run-tablet-acceptance` — boot a landscape tablet emulator and run the integration acceptance suite.
+- Subagents: `offline-first-reviewer` (guards the offline invariant), `flutter-test-writer` (writes tests in the repo's style), `local-data-migration-reviewer` (guards local `sqflite` data against destructive migrations), `tablet-field-ux-reviewer` (landscape/field usability).
+- Hooks auto-run `dart format` on save, block TODO markers / `pubspec.lock` edits, and block any edit that would add a network/cloud/GPS dependency (the offline invariant).
+- MCP: `dart` (analyzer/tests/pub/DevTools), `context7` (package docs), `github`.

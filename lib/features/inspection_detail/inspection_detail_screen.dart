@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:printing/printing.dart';
 
 import '../../core/theme.dart';
 import '../../core/workspace_models.dart';
@@ -44,18 +47,6 @@ class InspectionDetailScreen extends ConsumerWidget {
       }
     }
 
-    Future<String> generatePdf() async {
-      final record = await controller.inspectionRecordById(inspection.id);
-      if (record == null) {
-        return 'Inspection ${inspection.documentNumber} was not found.';
-      }
-      final result = await ref
-          .read(inspectionWorkflowServiceProvider)
-          .generatePdf(record);
-      await controller.refresh();
-      return 'PDF generated: ${result.pdfFile.path}';
-    }
-
     Future<String> emailHandoff() async {
       final record = await controller.inspectionRecordById(inspection.id);
       if (record == null) {
@@ -66,6 +57,86 @@ class InspectionDetailScreen extends ConsumerWidget {
           .shareInspectionPdf(record);
       await controller.refresh();
       return 'Share handoff opened with ${result.pdfFile.path}';
+    }
+
+    Future<void> showPdfReadyDialog(File pdfFile) {
+      return showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('PDF ready'),
+          content: Text(
+            'The report was generated locally and can be viewed or shared now.\n\n${pdfFile.path}',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await runWorkflow(emailHandoff);
+              },
+              icon: const Icon(Icons.ios_share_outlined),
+              label: const Text('Share'),
+            ),
+            FilledButton.icon(
+              onPressed: () async {
+                try {
+                  final bytes = await pdfFile.readAsBytes();
+                  await Printing.layoutPdf(
+                    name: pdfFile.uri.pathSegments.last,
+                    onLayout: (_) async => bytes,
+                  );
+                } catch (error) {
+                  if (!context.mounted) {
+                    return;
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Unable to open PDF: $error')),
+                  );
+                }
+              },
+              icon: const Icon(Icons.visibility_outlined),
+              label: const Text('View'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Future<void> generatePdf() async {
+      try {
+        final record = await controller.inspectionRecordById(inspection.id);
+        if (record == null) {
+          if (!context.mounted) {
+            return;
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Inspection ${inspection.documentNumber} was not found.',
+              ),
+            ),
+          );
+          return;
+        }
+        final result = await ref
+            .read(inspectionWorkflowServiceProvider)
+            .generatePdf(record);
+        await controller.refresh();
+        if (!context.mounted) {
+          return;
+        }
+        await showPdfReadyDialog(result.pdfFile);
+      } catch (error) {
+        if (!context.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Inspection action failed: $error')),
+        );
+      }
     }
 
     Future<String> exportInspection() async {
@@ -103,7 +174,7 @@ class InspectionDetailScreen extends ConsumerWidget {
               final details = _DetailSections(inspection: inspection);
               final side = _SideSummary(
                 inspection: inspection,
-                onGeneratePdf: () => runWorkflow(generatePdf),
+                onGeneratePdf: generatePdf,
                 onEmailHandoff: () => runWorkflow(emailHandoff),
                 onExportInspection: () => runWorkflow(exportInspection),
               );

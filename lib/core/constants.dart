@@ -19,6 +19,7 @@ class AppConstants {
   static const String importsFolderName = 'imports';
   static const String reportsFolderName = 'reports';
   static const String signatureFileName = 'signature.png';
+  static const String customerSignatureFileName = 'customer_signature.png';
   static const String lotOWarning =
       'Critical / Out of Service condition identified. Lockout/Tagout required. '
       'Unit must not be operated until corrective action is complete.';

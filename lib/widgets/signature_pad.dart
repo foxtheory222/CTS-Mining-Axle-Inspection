@@ -9,11 +9,13 @@ class SignaturePad extends StatelessWidget {
     required this.controller,
     required this.isSigned,
     required this.onClear,
+    this.title = 'Technician signature',
   });
 
   final SignatureController controller;
   final bool isSigned;
   final VoidCallback onClear;
+  final String title;
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +25,7 @@ class SignaturePad extends StatelessWidget {
         Row(
           children: [
             Text(
-              'Technician signature',
+              title,
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),

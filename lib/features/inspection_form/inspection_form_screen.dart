@@ -38,8 +38,11 @@ class InspectionFormScreen extends ConsumerStatefulWidget {
 class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
   late final ScrollController _scrollController;
   late final SignatureController _signatureController;
+  late final SignatureController _customerSignatureController;
   late final Map<String, GlobalKey> _keys;
   late final TextEditingController _customer;
+  late final TextEditingController _customerRepresentative;
+  late final TextEditingController _customerUnavailableNote;
   late final TextEditingController _workOrder;
   late final TextEditingController _site;
   late final TextEditingController _equipmentMake;
@@ -74,6 +77,7 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
   bool _thermographyPerformed = false;
   bool _criticalAcknowledged = false;
   bool _signed = false;
+  bool _customerSigned = false;
   List<ValidationIssue> _validationIssues = const <ValidationIssue>[];
 
   List<_SectionState> get _sections => MiningAxleTemplate.sections
@@ -95,9 +99,16 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       penColor: CtsPalette.orange,
       exportBackgroundColor: Colors.white,
     )..addListener(_handleSignatureChanged);
+    _customerSignatureController = SignatureController(
+      penStrokeWidth: 3,
+      penColor: CtsPalette.orange,
+      exportBackgroundColor: Colors.white,
+    )..addListener(_handleCustomerSignatureChanged);
     _keys = {for (final section in _sections) section.key: GlobalKey()};
 
     _customer = TextEditingController();
+    _customerRepresentative = TextEditingController();
+    _customerUnavailableNote = TextEditingController();
     _workOrder = TextEditingController();
     _site = TextEditingController();
     _equipmentMake = TextEditingController();
@@ -136,7 +147,12 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     _signatureController
       ..removeListener(_handleSignatureChanged)
       ..dispose();
+    _customerSignatureController
+      ..removeListener(_handleCustomerSignatureChanged)
+      ..dispose();
     _customer.dispose();
+    _customerRepresentative.dispose();
+    _customerUnavailableNote.dispose();
     _workOrder.dispose();
     _site.dispose();
     _equipmentMake.dispose();
@@ -554,6 +570,31 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
           },
         ),
         const SizedBox(height: 12),
+        TextField(
+          controller: _customerRepresentative,
+          decoration: const InputDecoration(
+            labelText: 'Customer representative name',
+          ),
+        ),
+        const SizedBox(height: 12),
+        SignaturePad(
+          title: 'Customer signature',
+          controller: _customerSignatureController,
+          isSigned: _customerSigned,
+          onClear: () {
+            _customerSignatureController.clear();
+            setState(() => _customerSigned = false);
+          },
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _customerUnavailableNote,
+          maxLines: 2,
+          decoration: const InputDecoration(
+            labelText: 'Customer unavailable reason (optional)',
+          ),
+        ),
+        const SizedBox(height: 12),
         Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -606,11 +647,27 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (needsEvidence)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: StatusChip(
-                text: 'Evidence required',
-                color: CtsPalette.orange,
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const StatusChip(
+                    text: 'Evidence required',
+                    color: CtsPalette.orange,
+                  ),
+                  OutlinedButton.icon(
+                    key: Key('add_evidence_photo_${item.itemKey}'),
+                    onPressed: _saving
+                        ? null
+                        : () =>
+                              _addPhoto(item.sectionKey, itemKey: item.itemKey),
+                    icon: const Icon(Icons.add_a_photo_outlined),
+                    label: const Text('Add evidence photo'),
+                  ),
+                ],
               ),
             ),
           LayoutBuilder(
@@ -631,6 +688,17 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
               );
             },
           ),
+          if (needsEvidence) ...[
+            const SizedBox(height: 8),
+            PhotoGrid(
+              photos: _photosForItem(item.sectionKey, item.itemKey),
+              emptyLabel: 'No evidence photos attached to this item yet.',
+              showAddTile: false,
+              onAddPhoto: _saving
+                  ? null
+                  : () => _addPhoto(item.sectionKey, itemKey: item.itemKey),
+            ),
+          ],
         ],
       ),
     );
@@ -869,6 +937,8 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
 
   void _applyRecord(InspectionRecord record) {
     _customer.text = record.customer;
+    _customerRepresentative.text = record.customerRepresentativeName;
+    _customerUnavailableNote.text = record.customerUnavailableNote;
     _workOrder.text = record.workOrderNumber;
     _site.text = record.siteLocation;
     _equipmentMake.text = record.equipmentMake;
@@ -885,6 +955,9 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     _reviewNotes.text = record.finalTechComments;
     _criticalAcknowledged = record.criticalAcknowledged;
     _signed = (record.signatureFilePath ?? '').trim().isNotEmpty;
+    _customerSigned = (record.customerSignatureFilePath ?? '')
+        .trim()
+        .isNotEmpty;
 
     _answers
       ..clear()
@@ -955,6 +1028,7 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     try {
       final draft = _draftFromForm();
       await _persistSignatureIfNeeded(draft);
+      await _persistCustomerSignatureIfNeeded(draft);
       await ref.read(workspaceProvider).saveInspectionRecord(draft);
       final saved =
           await ref.read(workspaceProvider).inspectionRecordById(draft.id) ??
@@ -1099,9 +1173,13 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     final draft = source.clone();
     final now = DateTime.now();
     final signatureCaptured = _signed || _signatureController.isNotEmpty;
+    final customerSignatureCaptured =
+        _customerSigned || _customerSignatureController.isNotEmpty;
 
     draft
       ..customer = _customer.text.trim()
+      ..customerRepresentativeName = _customerRepresentative.text.trim()
+      ..customerUnavailableNote = _customerUnavailableNote.text.trim()
       ..workOrderNumber = _workOrder.text.trim()
       ..siteLocation = _site.text.trim()
       ..equipmentMake = _equipmentMake.text.trim()
@@ -1120,6 +1198,13 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       ..criticalAcknowledged = _criticalAcknowledged
       ..signatureFilePath = signatureCaptured
           ? (draft.signatureFilePath ?? 'signature://${draft.id}')
+          : null
+      ..customerSignatureFilePath = customerSignatureCaptured
+          ? (draft.customerSignatureFilePath ??
+                'signature://customer/${draft.id}')
+          : null
+      ..customerSignatureDate = customerSignatureCaptured
+          ? (draft.customerSignatureDate ?? now)
           : null
       ..responses = _responsesFor(draft, now)
       ..photos = List<InspectionPhoto>.of(_recordPhotos)
@@ -1447,6 +1532,15 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
         .toList(growable: false);
   }
 
+  List<InspectionPhotoView> _photosForItem(String sectionKey, String itemKey) {
+    return _recordPhotos
+        .where(
+          (photo) => photo.sectionKey == sectionKey && photo.itemKey == itemKey,
+        )
+        .map(_photoView)
+        .toList(growable: false);
+  }
+
   void _refreshPhotoViews() {
     _photos
       ..clear()
@@ -1574,6 +1668,13 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     }
   }
 
+  void _handleCustomerSignatureChanged() {
+    final signed = _customerSignatureController.isNotEmpty;
+    if (signed != _customerSigned && mounted) {
+      setState(() => _customerSigned = signed);
+    }
+  }
+
   Future<void> _persistSignatureIfNeeded(InspectionRecord draft) async {
     if (!_signatureController.isNotEmpty) {
       return;
@@ -1589,7 +1690,26 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     draft.signatureFilePath = file.path;
   }
 
-  Future<void> _addPhoto(String sectionKey) async {
+  Future<void> _persistCustomerSignatureIfNeeded(InspectionRecord draft) async {
+    if (!_customerSignatureController.isNotEmpty) {
+      return;
+    }
+    final bytes = await _customerSignatureController.toPngBytes();
+    if (bytes == null || bytes.isEmpty) {
+      draft.customerSignatureFilePath = null;
+      draft.customerSignatureDate = null;
+      return;
+    }
+    final directory = await FileUtils.inspectionDirectory(draft.id);
+    final file = File(
+      '${directory.path}/${AppConstants.customerSignatureFileName}',
+    );
+    await file.writeAsBytes(bytes, flush: true);
+    draft.customerSignatureFilePath = file.path;
+    draft.customerSignatureDate ??= DateTime.now();
+  }
+
+  Future<void> _addPhoto(String sectionKey, {String? itemKey}) async {
     if (_record == null || _saving) {
       return;
     }
@@ -1621,17 +1741,20 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     if (saved == null) {
       return;
     }
-    final itemKey = _defaultPhotoItemForSection(sectionKey);
+    final resolvedItemKey = itemKey ?? _defaultPhotoItemForSection(sectionKey);
     try {
       final photo = await ref
           .read(photoServiceProvider)
           .addPhoto(
             inspectionId: saved.id,
             sectionKey: sectionKey,
-            itemKey: itemKey,
+            itemKey: resolvedItemKey,
             source: source,
-            sortOrder: _nextPhotoSortOrder(sectionKey, itemKey),
-            caption: MiningAxleTemplate.itemByKey(sectionKey, itemKey)?.label,
+            sortOrder: _nextPhotoSortOrder(sectionKey, resolvedItemKey),
+            caption: MiningAxleTemplate.itemByKey(
+              sectionKey,
+              resolvedItemKey,
+            )?.label,
           );
       if (photo == null) {
         return;

@@ -39,6 +39,7 @@ class InspectionReportMapper {
       finalTechComments: record.finalTechComments,
       criticalAcknowledged: record.criticalAcknowledged,
       signature: _signatureFor(record),
+      customerSignature: _customerSignatureFor(record),
       sections: sections,
       actionItems: record.actionItems.map(_actionFor).toList(growable: false),
       branding: const InspectionReportBranding(
@@ -221,6 +222,22 @@ class InspectionReportMapper {
       filePath: path,
       signerName: record.technicianName,
       signedAt: record.completedAt ?? record.updatedAt,
+    );
+  }
+
+  static InspectionReportSignature? _customerSignatureFor(
+    InspectionRecord record,
+  ) {
+    final path = record.customerSignatureFilePath?.trim();
+    if (path == null || path.isEmpty) {
+      return null;
+    }
+    return InspectionReportSignature(
+      filePath: path,
+      signerName: record.customerRepresentativeName.trim().isEmpty
+          ? record.customer
+          : record.customerRepresentativeName.trim(),
+      signedAt: record.customerSignatureDate ?? record.updatedAt,
     );
   }
 

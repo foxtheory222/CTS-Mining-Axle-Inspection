@@ -75,6 +75,41 @@ void main() {
     expect(find.text('Sample photo'), findsNothing);
   });
 
+  testWidgets('flagged rows expose a per-item evidence photo action', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1600, 1000));
+    addTearDown(() async => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: InspectionFormScreen(initialRecord: _blankInspection()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final oilLeaksDropdown = find.byWidgetPredicate(
+      (widget) =>
+          widget is DropdownButtonFormField<String> &&
+          widget.decoration.labelText == 'Oil Leaks',
+      description: 'Oil Leaks dropdown',
+    );
+    await tester.ensureVisible(oilLeaksDropdown);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(oilLeaksDropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Evidence required'), findsOneWidget);
+    expect(
+      find.byKey(const Key('add_evidence_photo_oil_leaks')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('row comments and table inputs persist after save and reload', (
     tester,
   ) async {

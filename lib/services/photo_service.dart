@@ -390,8 +390,10 @@ class PhotoService {
     required String itemKey,
     required PhotoInputSource source,
     required int sortOrder,
+    required int currentPhotoCount,
     String? caption,
   }) async {
+    _assertPhotoSlotsAvailable(currentPhotoCount, 1);
     final bytes = await _pickLegacyBytes(source);
     if (bytes == null) {
       return null;
@@ -449,6 +451,7 @@ class PhotoService {
     required ManagedPhotoSource source,
     required String originalFileName,
   }) async {
+    final outputBytes = _compressToJpeg(bytes);
     final directory = await resolveInspectionPhotoDirectory(
       inspectionId: inspectionId,
       sectionKey: sectionKey,
@@ -461,7 +464,6 @@ class PhotoService {
       originalFileName: originalFileName,
     );
     final file = File(p.join(directory.path, fileName));
-    final outputBytes = _compressToJpeg(bytes);
     await file.writeAsBytes(outputBytes, flush: true);
     return ManagedInspectionPhoto(
       filePath: file.path,
@@ -477,9 +479,18 @@ class PhotoService {
   }
 
   Uint8List _compressToJpeg(Uint8List rawBytes) {
-    final img.Image? image = img.decodeImage(rawBytes);
+    img.Image? image;
+    try {
+      image = img.decodeImage(rawBytes);
+    } on Object {
+      throw PhotoServiceException.invalidAsset(
+        'The selected file is not a supported image.',
+      );
+    }
     if (image == null) {
-      return rawBytes;
+      throw PhotoServiceException.invalidAsset(
+        'The selected file is not a supported image.',
+      );
     }
 
     final img.Image resized = image.width > 1600
@@ -497,8 +508,7 @@ class PhotoService {
     final safeSegment = FileUtils.sanitizeFileSegment(
       <String>[inspectionId, sectionKey, itemKey].join('_'),
     );
-    final extension = p.extension(originalFileName);
-    return '${safeSegment}_${DateTime.now().toUtc().millisecondsSinceEpoch}_${_uuid.v4()}${extension.isEmpty ? '.jpg' : extension}';
+    return '${safeSegment}_${DateTime.now().toUtc().millisecondsSinceEpoch}_${_uuid.v4()}.jpg';
   }
 
   int _remainingSlots(int currentPhotoCount) {

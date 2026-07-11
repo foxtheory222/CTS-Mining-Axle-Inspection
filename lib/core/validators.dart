@@ -79,6 +79,7 @@ class InspectionValidator {
       );
     }
 
+    _validateRequiredSelections(inspection, issues);
     _validateChecklistResponses(inspection, issues);
     _validateOilSample(inspection, issues);
     final hasAbnormalFindings = _hasAbnormalFindings(inspection);
@@ -132,6 +133,39 @@ class InspectionValidator {
           purposeKeys.contains(response.itemKey) &&
           MiningAxleTemplate.isTruthy(response.value);
     });
+  }
+
+  static void _validateRequiredSelections(
+    InspectionRecord inspection,
+    List<ValidationIssue> issues,
+  ) {
+    for (final item in MiningAxleTemplate.allChecklistItems) {
+      final options = switch (item.rule) {
+        MiningAxleResponseRule.condition => MiningAxleTemplate.conditionOptions,
+        MiningAxleResponseRule.defect => MiningAxleTemplate.defectOptions,
+        MiningAxleResponseRule.acceptable =>
+          MiningAxleTemplate.acceptableOptions,
+        MiningAxleResponseRule.operational =>
+          MiningAxleTemplate.operationalOptions,
+        _ => null,
+      };
+      if (options == null) {
+        continue;
+      }
+      final value = inspection
+          .responseByKey(item.sectionKey, item.itemKey)
+          ?.value
+          ?.trim();
+      if (value == null || !options.contains(value)) {
+        issues.add(
+          ValidationIssue(
+            sectionKey: item.sectionKey,
+            itemKey: item.itemKey,
+            message: '${item.label} selection is required.',
+          ),
+        );
+      }
+    }
   }
 
   static void _validateChecklistResponses(

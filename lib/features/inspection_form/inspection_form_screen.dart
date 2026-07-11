@@ -68,6 +68,7 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       <String, TextEditingController>{};
   final Set<String> _selectedPurposes = <String>{};
   final Set<String> _selectedFindings = <String>{};
+  final Set<String> _criticalItems = <String>{};
   final List<InspectionPhoto> _recordPhotos = <InspectionPhoto>[];
   final List<InspectionPhotoView> _photos = <InspectionPhotoView>[];
 
@@ -78,7 +79,6 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
   bool _criticalAcknowledged = false;
   bool _signed = false;
   bool _customerSigned = false;
-  List<ValidationIssue> _validationIssues = const <ValidationIssue>[];
 
   List<_SectionState> get _sections => MiningAxleTemplate.sections
       .map(
@@ -189,6 +189,10 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     }
 
     final issues = _visibleIssueMessages();
+    final checklistItems = _requiredChecklistItems;
+    final answeredChecklistCount = checklistItems
+        .where((item) => _optionsFor(item).contains(_answers[item.itemKey]))
+        .length;
     return LayoutBuilder(
       builder: (context, constraints) {
         final showRail = constraints.maxWidth >= Breakpoints.formRail;
@@ -202,6 +206,9 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
                 isEdit: widget.inspectionId != null,
                 documentNumber: _record!.documentNumber,
                 isSaving: _saving,
+                blockerCount: issues.length,
+                answeredChecklistCount: answeredChecklistCount,
+                totalChecklistCount: checklistItems.length,
                 onSaveDraft: _saveDraft,
                 onGeneratePdf: _notifyPdf,
                 onComplete: _completeInspection,
@@ -284,17 +291,21 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _fieldGrid(<_TextFieldSpec>[
-          _TextFieldSpec(_customer, 'Customer'),
+          _TextFieldSpec(_customer, 'Customer', required: true),
           _TextFieldSpec(_workOrder, 'Work Order Number'),
-          _TextFieldSpec(_site, 'Site'),
-          _TextFieldSpec(_equipmentMake, 'Equipment Make'),
-          _TextFieldSpec(_equipmentModel, 'Equipment Model'),
-          _TextFieldSpec(_machineSerial, 'Machine Serial No.'),
-          _TextFieldSpec(_axleManufacturer, 'Axle Manufacturer'),
-          _TextFieldSpec(_axleModel, 'Axle Model'),
-          _TextFieldSpec(_axleSerial, 'Axle Serial Number'),
+          _TextFieldSpec(_site, 'Site', required: true),
+          _TextFieldSpec(_equipmentMake, 'Equipment Make', required: true),
+          _TextFieldSpec(_equipmentModel, 'Equipment Model', required: true),
+          _TextFieldSpec(_machineSerial, 'Machine Serial No.', required: true),
+          _TextFieldSpec(
+            _axleManufacturer,
+            'Axle Manufacturer',
+            required: true,
+          ),
+          _TextFieldSpec(_axleModel, 'Axle Model', required: true),
+          _TextFieldSpec(_axleSerial, 'Axle Serial Number', required: true),
           _TextFieldSpec(_hours, 'Hours on Machine'),
-          _TextFieldSpec(_inspector, 'CTS Inspector'),
+          _TextFieldSpec(_inspector, 'CTS Inspector', required: true),
           _TextFieldSpec(_servicingShop, 'Servicing Shop'),
           _TextFieldSpec(_purchaseOrder, 'Purchase Order Number'),
           _TextFieldSpec(_relatedReport, 'Related Machine Report Reference'),
@@ -502,13 +513,14 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
           'health_reliability_risk',
           'Reliability Risk',
           MiningAxleTemplate.reliabilityRiskOptions,
-          defaultValue: 'Low',
+          required: true,
         ),
+        const SizedBox(height: 12),
         _dropdownField(
           'health_overall_condition',
           'Overall Condition',
           MiningAxleTemplate.overallConditionOptions,
-          defaultValue: 'Good',
+          required: true,
         ),
       ],
     ),
@@ -543,17 +555,29 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
         ],
         if (issues.length > 8)
           _IssueTile('${issues.length - 8} more completion issue(s).'),
-        CheckboxListTile(
-          value: _criticalAcknowledged,
-          onChanged: (value) =>
-              setState(() => _criticalAcknowledged = value ?? false),
-          title: const Text('Critical / Out of Service acknowledgement'),
-          subtitle: const Text(
-            'Inspector acknowledges critical/out-of-service item has been communicated/escalated according to CTS/site procedure.',
+        if (_criticalItems.isNotEmpty) ...[
+          Container(
+            decoration: BoxDecoration(
+              color: CtsPalette.danger.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: CtsPalette.danger.withValues(alpha: 0.35),
+              ),
+            ),
+            child: CheckboxListTile(
+              value: _criticalAcknowledged,
+              onChanged: (value) =>
+                  setState(() => _criticalAcknowledged = value ?? false),
+              title: const Text('Critical / Out of Service acknowledgement'),
+              subtitle: const Text(
+                'Confirm the condition has been communicated and escalated under CTS and site lockout/tagout procedure.',
+              ),
+              controlAffinity: ListTileControlAffinity.leading,
+              activeColor: CtsPalette.danger,
+            ),
           ),
-          controlAffinity: ListTileControlAffinity.leading,
-          activeColor: CtsPalette.orange,
-        ),
+          const SizedBox(height: 12),
+        ],
         const SizedBox(height: 12),
         TextField(
           controller: _reviewNotes,
@@ -627,13 +651,27 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
 
   Widget _optionRow(MiningAxleItem item, List<String> options) {
     final value = _answerValue(item, options);
-    final needsEvidence = _requiresEvidenceBadge(item, value);
+    final canBeCritical = _requiresEvidenceBadge(item, value);
+    final isCritical = _criticalItems.contains(item.itemKey);
+    final needsEvidence = canBeCritical || isCritical;
+    final needsComment =
+        needsEvidence ||
+        value == MiningAxleTemplate.fair ||
+        value == MiningAxleTemplate.notInspected;
     final commentController = _commentControllerFor(item.itemKey);
     final dropdown = _dropdownField(
       item.itemKey,
       item.label,
       options,
-      defaultValue: _defaultValueFor(item, options),
+      required: true,
+      onChanged: (selectedValue) {
+        if (!_requiresEvidenceBadge(item, selectedValue)) {
+          _criticalItems.remove(item.itemKey);
+          if (_criticalItems.isEmpty) {
+            _criticalAcknowledged = false;
+          }
+        }
+      },
     );
     final comments = TextField(
       key: Key('comment_${item.itemKey}'),
@@ -646,7 +684,7 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (needsEvidence)
+          if (needsComment)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Wrap(
@@ -654,19 +692,55 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
                 runSpacing: 8,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  const StatusChip(
-                    text: 'Evidence required',
-                    color: CtsPalette.orange,
+                  StatusChip(
+                    text: needsEvidence
+                        ? 'Comment, photo & action required'
+                        : 'Comment required',
+                    color: needsEvidence
+                        ? CtsPalette.orange
+                        : CtsPalette.warning,
                   ),
-                  OutlinedButton.icon(
-                    key: Key('add_evidence_photo_${item.itemKey}'),
-                    onPressed: _saving
-                        ? null
-                        : () =>
-                              _addPhoto(item.sectionKey, itemKey: item.itemKey),
-                    icon: const Icon(Icons.add_a_photo_outlined),
-                    label: const Text('Add evidence photo'),
-                  ),
+                  if (needsEvidence)
+                    OutlinedButton.icon(
+                      key: Key('add_evidence_photo_${item.itemKey}'),
+                      onPressed: _saving
+                          ? null
+                          : () => _addPhoto(
+                              item.sectionKey,
+                              itemKey: item.itemKey,
+                            ),
+                      icon: const Icon(Icons.add_a_photo_outlined),
+                      label: const Text('Add evidence photo'),
+                    ),
+                  if (canBeCritical || isCritical)
+                    FilterChip(
+                      key: Key('critical_toggle_${item.itemKey}'),
+                      selected: isCritical,
+                      avatar: Icon(
+                        Icons.warning_amber_rounded,
+                        size: 18,
+                        color: isCritical ? Colors.white : CtsPalette.danger,
+                      ),
+                      label: const Text('Critical / Out of Service'),
+                      selectedColor: CtsPalette.danger,
+                      checkmarkColor: Colors.white,
+                      labelStyle: TextStyle(
+                        color: isCritical ? Colors.white : CtsPalette.danger,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      onSelected: _saving
+                          ? null
+                          : (selected) {
+                              setState(() {
+                                selected
+                                    ? _criticalItems.add(item.itemKey)
+                                    : _criticalItems.remove(item.itemKey);
+                                if (_criticalItems.isEmpty) {
+                                  _criticalAcknowledged = false;
+                                }
+                              });
+                            },
+                    ),
                 ],
               ),
             ),
@@ -708,13 +782,17 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     String key,
     String label,
     List<String> options, {
-    String? defaultValue,
+    bool required = false,
+    ValueChanged<String>? onChanged,
   }) {
-    final fallback = defaultValue ?? options.first;
-    final value = _answers[key] ?? fallback;
+    final value = _answers[key];
     return DropdownButtonFormField<String>(
-      initialValue: options.contains(value) ? value : fallback,
-      decoration: InputDecoration(labelText: label),
+      initialValue: options.contains(value) ? value : null,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: required ? '$label *' : label,
+        hintText: 'Select an option',
+      ),
       items: options
           .map((option) => DropdownMenuItem(value: option, child: Text(option)))
           .toList(growable: false),
@@ -722,33 +800,89 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
         if (value == null) {
           return;
         }
-        setState(() => _answers[key] = value);
+        setState(() {
+          _answers[key] = value;
+          onChanged?.call(value);
+        });
       },
     );
   }
 
   Widget _scoreRow(String label) {
     final key = label.toLowerCase().replaceAll(' ', '_');
-    final value = double.tryParse(_answers[key] ?? '8') ?? 8;
+    final selectedValue = double.tryParse(_answers[key] ?? '');
+    final sliderValue = selectedValue ?? 0;
+    final scoreLabel = Text(
+      '$label *',
+      style: Theme.of(
+        context,
+      ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+    );
+    final scoreBadge = Container(
+      constraints: const BoxConstraints(minWidth: 82),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: selectedValue == null
+            ? Theme.of(context).colorScheme.surfaceContainerHighest
+            : CtsPalette.orange.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        selectedValue == null ? 'Not rated' : '${selectedValue.round()} / 10',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: selectedValue == null
+              ? Theme.of(context).colorScheme.onSurfaceVariant
+              : accessibleTintForeground(context, CtsPalette.orange),
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+    final slider = Slider(
+      value: sliderValue,
+      min: 0,
+      max: 10,
+      divisions: 10,
+      label: sliderValue.round().toString(),
+      onChanged: (value) {
+        setState(() => _answers[key] = value.round().toString());
+      },
+    );
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Expanded(child: Text(label)),
-          SizedBox(
-            width: 220,
-            child: Slider(
-              value: value,
-              min: 0,
-              max: 10,
-              divisions: 10,
-              label: value.round().toString(),
-              onChanged: (value) {
-                setState(() => _answers[key] = value.round().toString());
-              },
-            ),
-          ),
-        ],
+      child: Semantics(
+        label: '$label score, required',
+        value: selectedValue == null
+            ? 'Not rated'
+            : '${selectedValue.round()} out of 10',
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < Breakpoints.stackRow) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: scoreLabel),
+                      const SizedBox(width: 12),
+                      scoreBadge,
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  slider,
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: scoreLabel),
+                scoreBadge,
+                const SizedBox(width: 8),
+                SizedBox(width: 240, child: slider),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -900,7 +1034,9 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
               width: itemWidth,
               child: TextField(
                 controller: field.controller,
-                decoration: InputDecoration(labelText: field.label),
+                decoration: InputDecoration(
+                  labelText: field.required ? '${field.label} *' : field.label,
+                ),
               ),
             ),
         ],
@@ -965,6 +1101,17 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
         record.responses.map(
           (response) => MapEntry(response.itemKey, response.value ?? ''),
         ),
+      );
+    _criticalItems
+      ..clear()
+      ..addAll(
+        record.responses
+            .where(
+              (response) =>
+                  response.conditionRating ==
+                  ConditionRating.criticalOutOfService,
+            )
+            .map((response) => response.itemKey),
       );
     for (final item in _commentedItems) {
       _commentControllerFor(item.itemKey).text =
@@ -1038,9 +1185,6 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       }
       setState(() {
         _record = saved.clone();
-        _validationIssues = InspectionValidator.validateForCompletion(
-          saved,
-        ).issues;
         _applyRecord(saved);
       });
       if (showMessage) {
@@ -1051,6 +1195,9 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
         );
       }
       return saved;
+    } catch (error) {
+      _showActionError('Unable to save this inspection', error);
+      return null;
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -1079,6 +1226,8 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('PDF generated: ${result.pdfFile.path}')),
       );
+    } catch (error) {
+      _showActionError('Unable to generate the PDF', error);
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -1088,7 +1237,7 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
 
   Future<void> _notifyExport() async {
     final record = await _saveDraft(showMessage: false);
-    if (record == null) {
+    if (!mounted || record == null) {
       return;
     }
     setState(() => _saving = true);
@@ -1111,6 +1260,8 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
           ),
         ),
       );
+    } catch (error) {
+      _showActionError('Unable to export the inspection bundle', error);
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -1125,7 +1276,12 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     final draft = _draftFromForm();
     final validation = InspectionValidator.validateForCompletion(draft);
     if (!validation.isValid) {
-      setState(() => _validationIssues = validation.issues);
+      setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _jumpTo(validation.issues.first.sectionKey);
+        }
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1137,35 +1293,44 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     }
 
     final saved = await _saveDraft(showMessage: false);
-    if (saved == null) {
+    if (!mounted || saved == null) {
       return;
     }
-    final result = await ref
-        .read(inspectionWorkflowServiceProvider)
-        .completeInspection(saved);
-    await ref.read(workspaceProvider).refresh();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _record = result.inspection.clone();
-      _applyRecord(result.inspection);
-    });
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Complete inspection'),
-        content: const Text(
-          'Inspection validated, signed, and saved locally as complete.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+    setState(() => _saving = true);
+    try {
+      final result = await ref
+          .read(inspectionWorkflowServiceProvider)
+          .completeInspection(saved);
+      await ref.read(workspaceProvider).refresh();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _record = result.inspection.clone();
+        _applyRecord(result.inspection);
+      });
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Complete inspection'),
+          content: const Text(
+            'Inspection validated, signed, and saved locally as complete.',
           ),
-        ],
-      ),
-    );
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      _showActionError('Unable to complete this inspection', error);
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
   }
 
   InspectionRecord _draftFromForm() {
@@ -1320,36 +1485,36 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       MiningAxleTemplate.overallHealth,
       InspectionValidator.healthMechanicalConditionKey,
       'Mechanical Condition',
-      _answers[InspectionValidator.healthMechanicalConditionKey] ?? '8',
+      _answers[InspectionValidator.healthMechanicalConditionKey] ?? '',
       fieldType: InspectionFieldType.number,
     );
     addResponse(
       MiningAxleTemplate.overallHealth,
       InspectionValidator.healthLubricationConditionKey,
       'Lubrication Condition',
-      _answers[InspectionValidator.healthLubricationConditionKey] ?? '8',
+      _answers[InspectionValidator.healthLubricationConditionKey] ?? '',
       fieldType: InspectionFieldType.number,
     );
     addResponse(
       MiningAxleTemplate.overallHealth,
       InspectionValidator.healthContaminationControlKey,
       'Contamination Control',
-      _answers[InspectionValidator.healthContaminationControlKey] ?? '8',
+      _answers[InspectionValidator.healthContaminationControlKey] ?? '',
       fieldType: InspectionFieldType.number,
     );
     addResponse(
       MiningAxleTemplate.overallHealth,
       InspectionValidator.healthReliabilityRiskKey,
       'Reliability Risk',
-      _answers[InspectionValidator.healthReliabilityRiskKey] ?? 'Low',
+      _answers[InspectionValidator.healthReliabilityRiskKey] ?? '',
     );
     addResponse(
       MiningAxleTemplate.overallHealth,
       InspectionValidator.healthOverallConditionKey,
       'Overall Condition',
-      _answers[InspectionValidator.healthOverallConditionKey] ?? 'Good',
+      _answers[InspectionValidator.healthOverallConditionKey] ?? '',
       conditionRating: _overallConditionRating(
-        _answers[InspectionValidator.healthOverallConditionKey] ?? 'Good',
+        _answers[InspectionValidator.healthOverallConditionKey] ?? '',
       ),
     );
     return responses;
@@ -1366,6 +1531,19 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     ...MiningAxleTemplate.differentialConditionItems,
     ...MiningAxleTemplate.planetaryHubItems,
   ];
+
+  List<MiningAxleItem> get _requiredChecklistItems => MiningAxleTemplate
+      .allChecklistItems
+      .where(
+        (item) => switch (item.rule) {
+          MiningAxleResponseRule.condition ||
+          MiningAxleResponseRule.defect ||
+          MiningAxleResponseRule.acceptable ||
+          MiningAxleResponseRule.operational => true,
+          _ => false,
+        },
+      )
+      .toList(growable: false);
 
   TextEditingController _commentControllerFor(String itemKey) {
     return _commentControllers.putIfAbsent(itemKey, TextEditingController.new);
@@ -1516,9 +1694,9 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
     if (_record == null) {
       return const <String>[];
     }
-    final issues = _validationIssues.isEmpty
-        ? InspectionValidator.validateForCompletion(_draftFromForm()).issues
-        : _validationIssues;
+    final issues = InspectionValidator.validateForCompletion(
+      _draftFromForm(),
+    ).issues;
     return issues.map((issue) => issue.message).toList(growable: false);
   }
 
@@ -1573,24 +1751,13 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
   }
 
   String _answerValue(MiningAxleItem item, List<String> options) {
-    return _answers[item.itemKey] ?? _defaultValueFor(item, options);
-  }
-
-  String _defaultValueFor(MiningAxleItem item, List<String> options) {
-    return switch (item.rule) {
-      MiningAxleResponseRule.defect => 'No',
-      MiningAxleResponseRule.acceptable => 'Acceptable',
-      MiningAxleResponseRule.operational => 'Operational',
-      MiningAxleResponseRule.condition => 'Good',
-      _ => '',
-    };
+    final value = _answers[item.itemKey] ?? '';
+    return options.contains(value) ? value : '';
   }
 
   bool _requiresEvidenceBadge(MiningAxleItem item, String value) {
     return switch (item.rule) {
-      MiningAxleResponseRule.condition =>
-        value == MiningAxleTemplate.poor ||
-            value == MiningAxleTemplate.notInspected,
+      MiningAxleResponseRule.condition => value == MiningAxleTemplate.poor,
       MiningAxleResponseRule.defect =>
         value == MiningAxleTemplate.yes && item.itemKey != 'oil_sampling_taken',
       MiningAxleResponseRule.acceptable =>
@@ -1602,12 +1769,17 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
   }
 
   ConditionRating? _conditionRatingFor(MiningAxleItem item, String value) {
+    if (_criticalItems.contains(item.itemKey) &&
+        _requiresEvidenceBadge(item, value)) {
+      return ConditionRating.criticalOutOfService;
+    }
     return switch (item.rule) {
       MiningAxleResponseRule.condition => switch (value) {
+        'Good' => ConditionRating.satisfactory,
         MiningAxleTemplate.fair => ConditionRating.monitorAtRisk,
         MiningAxleTemplate.poor => ConditionRating.unsatisfactory,
         MiningAxleTemplate.notInspected => ConditionRating.monitorAtRisk,
-        _ => ConditionRating.satisfactory,
+        _ => null,
       },
       MiningAxleResponseRule.defect =>
         value == MiningAxleTemplate.yes && item.itemKey != 'oil_sampling_taken'
@@ -1751,6 +1923,13 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
             itemKey: resolvedItemKey,
             source: source,
             sortOrder: _nextPhotoSortOrder(sectionKey, resolvedItemKey),
+            currentPhotoCount: _recordPhotos
+                .where(
+                  (photo) =>
+                      photo.sectionKey == sectionKey &&
+                      photo.itemKey == resolvedItemKey,
+                )
+                .length,
             caption: MiningAxleTemplate.itemByKey(
               sectionKey,
               resolvedItemKey,
@@ -1777,6 +1956,8 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      _showActionError('Unable to add the photo', error);
     }
   }
 
@@ -1806,6 +1987,15 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       );
     }
   }
+
+  void _showActionError(String action, Object error) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$action: $error')));
+  }
 }
 
 class _Banner extends StatelessWidget {
@@ -1813,6 +2003,9 @@ class _Banner extends StatelessWidget {
     required this.isEdit,
     required this.documentNumber,
     required this.isSaving,
+    required this.blockerCount,
+    required this.answeredChecklistCount,
+    required this.totalChecklistCount,
     required this.onSaveDraft,
     required this.onGeneratePdf,
     required this.onComplete,
@@ -1821,6 +2014,9 @@ class _Banner extends StatelessWidget {
   final bool isEdit;
   final String documentNumber;
   final bool isSaving;
+  final int blockerCount;
+  final int answeredChecklistCount;
+  final int totalChecklistCount;
   final VoidCallback onSaveDraft;
   final VoidCallback onGeneratePdf;
   final VoidCallback onComplete;
@@ -1834,9 +2030,31 @@ class _Banner extends StatelessWidget {
           spacing: 10,
           runSpacing: 10,
           children: [
-            StatusChip(text: documentNumber, color: CtsPalette.orangeSoft),
+            StatusChip(
+              text: documentNumber,
+              color: CtsPalette.orangeSoft,
+              onDarkSurface: true,
+            ),
+            StatusChip(
+              text: '$answeredChecklistCount / $totalChecklistCount checks',
+              color: answeredChecklistCount == totalChecklistCount
+                  ? CtsPalette.success
+                  : CtsPalette.info,
+              onDarkSurface: true,
+            ),
+            StatusChip(
+              text: blockerCount == 0
+                  ? 'Ready to complete'
+                  : '$blockerCount blocker${blockerCount == 1 ? '' : 's'}',
+              color: blockerCount == 0 ? CtsPalette.success : CtsPalette.danger,
+              onDarkSurface: true,
+            ),
             if (isSaving)
-              const StatusChip(text: 'Saving', color: CtsPalette.info),
+              const StatusChip(
+                text: 'Saving',
+                color: CtsPalette.info,
+                onDarkSurface: true,
+              ),
           ],
         ),
         const SizedBox(height: 10),
@@ -1930,26 +2148,67 @@ class _SectionRail extends StatelessWidget {
       subtitle: 'Tap to jump.',
       child: Column(
         children: [
-          for (final section in sections) ...[
-            InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () => onJump(section.key),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  section.title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ),
+          for (var index = 0; index < sections.length; index++) ...[
+            Builder(
+              builder: (context) {
+                final section = sections[index];
+                return Semantics(
+                  button: true,
+                  label: 'Section ${index + 1}: ${section.title}',
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => onJump(section.key),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 11,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 28,
+                            height: 28,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: CtsPalette.orange.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(9),
+                            ),
+                            child: Text(
+                              '${index + 1}',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: CtsPalette.orange,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              section.title,
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right_rounded, size: 18),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
-            if (section != sections.last) const SizedBox(height: 8),
+            if (index != sections.length - 1) const SizedBox(height: 8),
           ],
         ],
       ),
@@ -2029,10 +2288,11 @@ class _IssueTile extends StatelessWidget {
 }
 
 class _TextFieldSpec {
-  const _TextFieldSpec(this.controller, this.label);
+  const _TextFieldSpec(this.controller, this.label, {this.required = false});
 
   final TextEditingController controller;
   final String label;
+  final bool required;
 }
 
 class _SectionState {

@@ -42,6 +42,32 @@ void main() {
   );
 
   test(
+    'remembering an existing recipient without a customer keeps its mapping',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'email_service_mapping_regression_',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      final store = JsonFileRecipientStore(
+        documentsDirectoryProvider: () async => tempDir,
+      );
+      await store.saveRecipient('service@example.com', customer: 'CTS');
+
+      await store.saveRecipient('service@example.com');
+
+      final recipients = await store.loadRecipients();
+      expect(recipients, hasLength(1));
+      expect(recipients.single.customer, 'CTS');
+      expect(recipients.single.usageCount, 2);
+    },
+  );
+
+  test(
     'Email service launches share handoff and records the selected recipient',
     () async {
       final tempDir = await Directory.systemTemp.createTemp(

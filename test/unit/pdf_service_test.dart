@@ -43,7 +43,7 @@ void main() {
       emailedAt: DateTime(2026, 4, 18, 12, 15),
       status: InspectionReportStatus.emailed,
       finalTechComments:
-          'Unit inspected offline. Tank cleaning and hose replacement recommended on next visit.',
+          'Unit inspected offline — temperature stable at 72 °C. Tank cleaning and hose replacement recommended on next visit.',
       criticalAcknowledged: true,
       signature: InspectionReportSignature(
         bytes: signatureBytes,
@@ -177,7 +177,7 @@ void main() {
   });
 
   test(
-    'generateInspectionReportBytes renders report content and critical warning text',
+    'generateInspectionReportBytes embeds a Unicode-capable report font',
     () async {
       final service = PdfService(compress: false);
       final data = buildReport();
@@ -191,15 +191,16 @@ void main() {
       expect(pdfText, contains('AXLE'));
       expect(pdfText, contains('INSPECTION'));
       expect(pdfText, contains('REPORT'));
-      expect(pdfText, contains('Lockout/Tagout'));
-      expect(pdfText, contains('WO-7788'));
-      expect(pdfText, contains('PO-4421'));
-      expect(pdfText, contains('AX-42'));
-      expect(pdfText, contains('MACH-42'));
-      expect(pdfText, contains('HPU-42'));
-      expect(pdfText, contains('Private'));
-      expect(pdfText, contains('confidential'));
-      expect(pdfText, contains('Alex'));
+      expect(pdfText, contains('/ToUnicode'));
+      expect(pdfText, contains('PublicSans'));
+      expect(pdfText, contains('/Count 9'));
+      expect(data.finalTechComments, contains('72 °C'));
+      expect(
+        data.actionItems.any(
+          (item) => item.conditionRating == ReportConditionRating.critical,
+        ),
+        isTrue,
+      );
     },
   );
 

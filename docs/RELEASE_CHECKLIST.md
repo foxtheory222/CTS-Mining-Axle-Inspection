@@ -12,6 +12,8 @@
 - Critical items require lockout/tagout acknowledgement.
 - PDF generation succeeds and stores a local file.
 - Email/share handoff works and emailed status updates only after confirmation.
+- Draft save never marks an inspection complete; only the explicit completion action can set completion state.
+- Every fixed checklist and health field requires an explicit inspector selection.
 - Photos, signatures, and local file paths are stable.
 - Recent recipient history and customer email mappings persist locally.
 - Sample and placeholder assets resolve correctly in the app shell.
@@ -23,6 +25,9 @@
 - `flutter test integration_test` passes on a tablet emulator.
 - `flutter build apk --debug` passes.
 - `flutter build apk --release` passes when supported by the environment.
+- `./gradlew lintRelease` reports zero app errors and warnings.
+- The 412x915 portrait shell/editor and the three landscape matrix sizes pass
+  without layout exceptions.
 
 ## Release Artifacts
 - APK is generated and verified.

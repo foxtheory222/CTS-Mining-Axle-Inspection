@@ -169,6 +169,7 @@ class _HeroBanner extends StatelessWidget {
             label: 'Critical reports require LOTO acknowledgement',
             color: CtsPalette.danger,
             icon: Icons.warning_amber_rounded,
+            onDarkSurface: true,
           ),
           const SizedBox(height: 12),
           Text(
@@ -230,62 +231,72 @@ class _MetricsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      itemCount: metrics.length,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 260,
-        mainAxisExtent: 144,
-        crossAxisSpacing: 14,
-        mainAxisSpacing: 14,
-      ),
-      itemBuilder: (context, index) {
-        final metric = metrics[index];
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: metric.color.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(14),
+    return LayoutBuilder(
+      builder: (context, constraints) => GridView.builder(
+        itemCount: metrics.length,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: constraints.maxWidth < 520
+            ? const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 1,
+                mainAxisExtent: 132,
+                mainAxisSpacing: 14,
+              )
+            : const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 260,
+                mainAxisExtent: 144,
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
+              ),
+        itemBuilder: (context, index) {
+          final metric = metrics[index];
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: metric.color.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(metric.icon, color: metric.color),
                       ),
-                      child: Icon(metric.icon, color: metric.color),
-                    ),
-                    const Spacer(),
-                    Text(
-                      metric.value,
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                Text(
-                  metric.label,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+                      const Spacer(),
+                      Text(
+                        metric.value,
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  metric.subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  const Spacer(),
+                  Text(
+                    metric.label,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 6),
+                  Text(
+                    metric.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

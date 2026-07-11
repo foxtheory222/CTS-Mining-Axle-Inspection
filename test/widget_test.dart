@@ -31,6 +31,31 @@ void main() {
     expect(find.text('Mining Axle Dashboard'), findsOneWidget);
     expect(find.text('Critical Reports'), findsOneWidget);
     expect(find.textContaining('Fluid Power'), findsNothing);
+    final activeLabel = tester.widget<Text>(find.text('Active'));
+    final railScheme = Theme.of(
+      tester.element(find.text('Active')),
+    ).colorScheme;
+    expect(activeLabel.style?.color, railScheme.onSurfaceVariant);
+  });
+
+  testWidgets('dashboard shell adapts to a 412x915 portrait viewport', (
+    WidgetTester tester,
+  ) async {
+    final scope = await _testAppScope();
+    addTearDown(() => _disposeScope(tester, scope));
+    await tester.binding.setSurfaceSize(const Size(412, 915));
+    addTearDown(() async => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(scope.wrap(const CtsMiningAxleInspectionApp()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mining Axle Dashboard'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Workflow Scope'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('navigation rail opens the inspection list', (

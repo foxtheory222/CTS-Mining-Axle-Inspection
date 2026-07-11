@@ -34,8 +34,70 @@ class AppShell extends ConsumerWidget {
           bottom: false,
           child: LayoutBuilder(
             builder: (context, constraints) {
+              final compact = constraints.maxWidth < 700;
               final wide = constraints.maxWidth >= 1240;
               final railWidth = wide ? 244.0 : 116.0;
+              final contentArea = Column(
+                children: [
+                  _TopStrip(
+                    compact: compact,
+                    metricValue: controller.inspections.length.toString(),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        compact ? 12 : 16,
+                        0,
+                        compact ? 12 : 16,
+                        compact ? 8 : 16,
+                      ),
+                      child: child,
+                    ),
+                  ),
+                ],
+              );
+              if (compact) {
+                return Column(
+                  children: [
+                    Expanded(child: contentArea),
+                    SafeArea(
+                      top: false,
+                      child: NavigationBar(
+                        selectedIndex: selectedIndex,
+                        onDestinationSelected: onDestinationSelected,
+                        labelBehavior:
+                            NavigationDestinationLabelBehavior.onlyShowSelected,
+                        destinations: const [
+                          NavigationDestination(
+                            icon: Icon(Icons.space_dashboard_outlined),
+                            selectedIcon: Icon(Icons.space_dashboard_rounded),
+                            label: 'Dashboard',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.search_outlined),
+                            selectedIcon: Icon(Icons.search_rounded),
+                            label: 'Inspections',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.edit_document),
+                            label: 'New',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.assignment_turned_in_outlined),
+                            selectedIcon: Icon(Icons.assignment_turned_in),
+                            label: 'Actions',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.settings_outlined),
+                            selectedIcon: Icon(Icons.settings),
+                            label: 'Settings',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              }
               return Row(
                 children: [
                   SizedBox(
@@ -50,22 +112,7 @@ class AppShell extends ConsumerWidget {
                           .length,
                     ),
                   ),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _TopStrip(
-                          wide: wide,
-                          metricValue: controller.inspections.length.toString(),
-                        ),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                            child: child,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  Expanded(child: contentArea),
                 ],
               );
             },
@@ -77,9 +124,9 @@ class AppShell extends ConsumerWidget {
 }
 
 class _TopStrip extends StatelessWidget {
-  const _TopStrip({required this.wide, required this.metricValue});
+  const _TopStrip({required this.compact, required this.metricValue});
 
-  final bool wide;
+  final bool compact;
   final String metricValue;
 
   @override
@@ -98,6 +145,9 @@ class _TopStrip extends StatelessWidget {
           final brand = _BrandBlock(showSubtitle: showSubtitle);
           final statusPills = _StatusPills(metricValue: metricValue);
 
+          if (compact) {
+            return brand;
+          }
           if (constraints.maxWidth < 700) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -410,10 +460,11 @@ class _RailHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: tint.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: tint.withValues(alpha: 0.18)),
       ),
@@ -427,14 +478,14 @@ class _RailHint extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelSmall?.copyWith(color: Colors.white70),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
                 Text(
                   value,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Colors.white,
+                    color: scheme.onSurface,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

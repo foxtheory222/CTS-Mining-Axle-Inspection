@@ -16,6 +16,7 @@ Use a fix-test-fix loop:
 - `flutter test --coverage` when practical
 - `flutter build apk --debug`
 - `flutter build apk --release` when the environment supports it
+- `cd android && ./gradlew lintRelease`
 - `flutter test integration_test` on an Android tablet emulator
 
 ## Execution Order
@@ -26,6 +27,11 @@ Use a fix-test-fix loop:
 5. Run `flutter test --coverage` when regression scope is broad enough to justify it.
 6. Run the integration flow on a connected Android tablet emulator.
 7. Run APK builds once tests are green.
+8. Render the production editor at 412x915 portrait plus 1024x600, 1280x800,
+   and 1600x1000 logical-pixel tablet viewports and fail on layout exceptions.
+9. Navigate the 412x915 production shell from Dashboard to Settings and fail
+   on any layout exception.
+10. Run Android release lint and require zero app errors and warnings.
 
 ## Coverage Areas
 ### Unit Tests
@@ -42,6 +48,7 @@ Use a fix-test-fix loop:
 - Required-field and flagged-item prompts.
 - Review screen validation summaries.
 - Signature and completion UI.
+- Explicit unanswered states, Critical / Out of Service selection, and sent-confirmation UI.
 
 ### Integration Tests
 - New inspection to completion.

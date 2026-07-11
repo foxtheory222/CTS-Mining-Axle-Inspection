@@ -195,7 +195,7 @@ class _AboutPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _InfoRow(label: 'App version', value: '1.0.0'),
+          const _InfoRow(label: 'App version', value: '1.1.0'),
           const _InfoRow(
             label: 'Template version',
             value: AppConstants.templateVersion,
@@ -230,7 +230,11 @@ class _InfoRow extends StatelessWidget {
               ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
           ),
-          Text(value),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: Text(value, textAlign: TextAlign.end, softWrap: true),
+          ),
         ],
       ),
     );

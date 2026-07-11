@@ -95,6 +95,25 @@ void main() {
         label: 'Overall Condition',
         options: MiningAxleTemplate.overallConditionOptions,
       );
+      await _chooseEveryDropdownOption(
+        tester,
+        label: 'Oil Leaks',
+        options: const <String>['Yes'],
+      );
+      final criticalToggle = find.byKey(const Key('critical_toggle_oil_leaks'));
+      await Scrollable.ensureVisible(
+        tester.element(criticalToggle),
+        alignment: 0.5,
+        duration: Duration.zero,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(criticalToggle);
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilterChip>(criticalToggle).selected, isTrue);
+      expect(
+        find.text('Critical / Out of Service acknowledgement'),
+        findsOneWidget,
+      );
       await _enterKeyedText(
         tester,
         const Key('comment_axle_housing'),
@@ -268,12 +287,13 @@ Future<void> _chooseEveryDropdownOption(
   required String label,
   required List<String> options,
 }) async {
+  final decoratedLabel = find.text('$label *');
   for (final option in options) {
-    await tester.ensureVisible(find.text(label).first);
+    await tester.ensureVisible(decoratedLabel.first);
     await tester.pumpAndSettle();
     final dropdown = find
         .ancestor(
-          of: find.text(label).first,
+          of: decoratedLabel.first,
           matching: find.byType(DropdownButtonFormField<String>),
         )
         .first;

@@ -18,12 +18,20 @@ class CtsPalette {
   static const info = Color(0xFF5AA7FF);
 }
 
+Color accessibleTintForeground(BuildContext context, Color color) {
+  if (Theme.of(context).brightness == Brightness.dark) {
+    return color;
+  }
+  final hsl = HSLColor.fromColor(color);
+  return hsl.withLightness(hsl.lightness.clamp(0.0, 0.34).toDouble()).toColor();
+}
+
 ThemeData buildCtsTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
   final scheme = ColorScheme(
     brightness: brightness,
     primary: CtsPalette.orange,
-    onPrimary: Colors.white,
+    onPrimary: CtsPalette.navy,
     secondary: CtsPalette.slate,
     onSecondary: Colors.white,
     error: CtsPalette.danger,
@@ -137,7 +145,8 @@ ThemeData buildCtsTheme(Brightness brightness) {
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: CtsPalette.orange,
-        foregroundColor: Colors.white,
+        foregroundColor: CtsPalette.navy,
+        minimumSize: const Size(0, 52),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         textStyle: const TextStyle(
           fontFamily: 'Inter',
@@ -149,7 +158,8 @@ ThemeData buildCtsTheme(Brightness brightness) {
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: CtsPalette.orange,
-        foregroundColor: Colors.white,
+        foregroundColor: CtsPalette.navy,
+        minimumSize: const Size(0, 52),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         textStyle: const TextStyle(
           fontFamily: 'Inter',
@@ -161,6 +171,7 @@ ThemeData buildCtsTheme(Brightness brightness) {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: scheme.onSurface,
+        minimumSize: const Size(0, 52),
         side: BorderSide(color: scheme.outlineVariant),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         textStyle: const TextStyle(

@@ -10,33 +10,41 @@ class StatusBadge extends StatelessWidget {
     required this.color,
     this.icon,
     this.tight = false,
+    this.onDarkSurface = false,
   });
 
-  factory StatusBadge.forInspection(InspectionStatus status) {
+  factory StatusBadge.forInspection(
+    InspectionStatus status, {
+    bool onDarkSurface = false,
+  }) {
     switch (status) {
       case InspectionStatus.draft:
-        return const StatusBadge(
+        return StatusBadge(
           label: 'Draft',
           color: CtsPalette.slate,
           icon: Icons.description_outlined,
+          onDarkSurface: onDarkSurface,
         );
       case InspectionStatus.inProgress:
-        return const StatusBadge(
+        return StatusBadge(
           label: 'In Progress',
           color: CtsPalette.orange,
           icon: Icons.play_circle_outline,
+          onDarkSurface: onDarkSurface,
         );
       case InspectionStatus.complete:
-        return const StatusBadge(
+        return StatusBadge(
           label: 'Complete',
           color: CtsPalette.success,
           icon: Icons.verified_outlined,
+          onDarkSurface: onDarkSurface,
         );
       case InspectionStatus.emailed:
-        return const StatusBadge(
+        return StatusBadge(
           label: 'Emailed',
           color: CtsPalette.info,
           icon: Icons.mark_email_read_outlined,
+          onDarkSurface: onDarkSurface,
         );
     }
   }
@@ -74,9 +82,13 @@ class StatusBadge extends StatelessWidget {
   final Color color;
   final IconData? icon;
   final bool tight;
+  final bool onDarkSurface;
 
   @override
   Widget build(BuildContext context) {
+    final foreground = onDarkSurface
+        ? color
+        : accessibleTintForeground(context, color);
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: tight ? 10 : 12,
@@ -91,7 +103,7 @@ class StatusBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 16, color: color),
+            Icon(icon, size: 16, color: foreground),
             const SizedBox(width: 8),
           ],
           Flexible(
@@ -101,7 +113,7 @@ class StatusBadge extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               softWrap: true,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: color,
+                color: foreground,
                 fontWeight: FontWeight.w800,
               ),
             ),

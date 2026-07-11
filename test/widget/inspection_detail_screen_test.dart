@@ -86,12 +86,116 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'View'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Share'), findsOneWidget);
   });
+
+  testWidgets('not sent yet keeps a shared inspection Complete', (
+    tester,
+  ) async {
+    final fixture = await _pumpEmailHandoffFixture(tester, 'not-sent');
+    final refreshBefore = fixture.workspace.refreshCount;
+
+    await tester.tap(find.text('Share customer report'));
+    await tester.pumpAndSettle();
+    expect(find.text('Confirm report sent'), findsOneWidget);
+    await tester.tap(find.text('Not sent yet'));
+    await tester.pumpAndSettle();
+
+    expect(fixture.workflow.shareCount, 1);
+    expect(fixture.workflow.confirmCount, 0);
+    expect(fixture.workspace.record.status, InspectionStatus.complete);
+    expect(fixture.workspace.record.emailedAt, isNull);
+    expect(fixture.workspace.refreshCount, refreshBefore + 1);
+    expect(find.textContaining('Status remains Complete'), findsOneWidget);
+  });
+
+  testWidgets('mark emailed confirms the shared inspection as Emailed', (
+    tester,
+  ) async {
+    final fixture = await _pumpEmailHandoffFixture(tester, 'confirmed-sent');
+    final refreshBefore = fixture.workspace.refreshCount;
+
+    await tester.tap(find.text('Share customer report'));
+    await tester.pumpAndSettle();
+    expect(find.text('Confirm report sent'), findsOneWidget);
+    await tester.tap(find.text('Mark emailed'));
+    await tester.pumpAndSettle();
+
+    expect(fixture.workflow.shareCount, 1);
+    expect(fixture.workflow.confirmCount, 1);
+    expect(fixture.workspace.record.status, InspectionStatus.emailed);
+    expect(fixture.workspace.record.emailedAt, isNotNull);
+    expect(fixture.workspace.refreshCount, refreshBefore + 1);
+    expect(find.textContaining('marked as emailed'), findsOneWidget);
+  });
+}
+
+Future<_EmailHandoffFixture> _pumpEmailHandoffFixture(
+  WidgetTester tester,
+  String suffix,
+) async {
+  final tempDir = Directory.systemTemp.createTempSync(
+    'inspection_detail_email_$suffix',
+  );
+  final database = TestAppDatabase(tempDir);
+  final repository = InspectionRepository(
+    database: database,
+    documentNumberService: DocumentNumberService(),
+  );
+  final pdfFile = File('${tempDir.path}/generated.pdf')
+    ..writeAsBytesSync(<int>[37, 80, 68, 70]);
+  final inspection = buildInspection(
+    id: 'inspection-detail-$suffix',
+    documentNumber: '20260701-0002',
+    status: InspectionStatus.complete,
+    completedAt: DateTime.utc(2026, 7, 1, 12),
+  );
+  final workspace = _DetailWorkspaceController(
+    repository: repository,
+    record: inspection,
+  );
+  final workflow = _FakeWorkflowService(
+    repository: repository,
+    pdfFile: pdfFile,
+    record: inspection,
+  );
+  addTearDown(() async {
+    await database.close();
+    if (tempDir.existsSync()) {
+      tempDir.deleteSync(recursive: true);
+    }
+  });
+  await tester.binding.setSurfaceSize(const Size(1600, 1000));
+  addTearDown(() async => tester.binding.setSurfaceSize(null));
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        workspaceProvider.overrideWith((ref) => workspace),
+        inspectionWorkflowServiceProvider.overrideWithValue(workflow),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: InspectionDetailScreen(inspectionId: inspection.id),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  workspace.refreshCount = 0;
+  return _EmailHandoffFixture(workspace: workspace, workflow: workflow);
+}
+
+class _EmailHandoffFixture {
+  const _EmailHandoffFixture({required this.workspace, required this.workflow});
+
+  final _DetailWorkspaceController workspace;
+  final _FakeWorkflowService workflow;
 }
 
 class _DetailWorkspaceController extends AppWorkspaceController {
   _DetailWorkspaceController({required super.repository, required this.record});
 
   final InspectionRecord record;
+  int refreshCount = 0;
 
   @override
   InspectionSummary? inspectionById(String id) {
@@ -110,19 +214,29 @@ class _DetailWorkspaceController extends AppWorkspaceController {
   }
 
   @override
-  Future<void> refresh() async {}
+  Future<void> refresh() async {
+    refreshCount++;
+    notifyListeners();
+  }
 }
 
 class _FakeWorkflowService extends InspectionWorkflowService {
-  _FakeWorkflowService({required super.repository, required this.pdfFile})
-    : super(
-        pdfService: PdfService(compress: false),
-        backupService: BackupService(),
-        emailService: EmailService(shareAdapter: FakeEmailShareAdapter()),
-      );
+  _FakeWorkflowService({
+    required super.repository,
+    required this.pdfFile,
+    InspectionRecord? record,
+  }) : _record = record,
+       super(
+         pdfService: PdfService(compress: false),
+         backupService: BackupService(),
+         emailService: EmailService(shareAdapter: FakeEmailShareAdapter()),
+       );
 
   final File pdfFile;
+  final InspectionRecord? _record;
   int generateCount = 0;
+  int shareCount = 0;
+  int confirmCount = 0;
 
   @override
   Future<PdfGenerationResult> generatePdf(InspectionRecord inspection) async {
@@ -138,6 +252,7 @@ class _FakeWorkflowService extends InspectionWorkflowService {
     InspectionRecord inspection, {
     List<String> recipients = const <String>[],
   }) async {
+    shareCount++;
     return InspectionEmailWorkflowResult(
       inspection: inspection.clone(),
       pdfFile: pdfFile,
@@ -149,6 +264,18 @@ class _FakeWorkflowService extends InspectionWorkflowService {
         attachmentPath: pdfFile.path,
       ),
     );
+  }
+
+  @override
+  Future<InspectionRecord> confirmInspectionEmailed(
+    InspectionRecord inspection,
+  ) async {
+    confirmCount++;
+    final confirmed = _record ?? inspection;
+    confirmed
+      ..status = InspectionStatus.emailed
+      ..emailedAt = DateTime.utc(2026, 7, 1, 13);
+    return confirmed.clone();
   }
 }
 

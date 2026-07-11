@@ -95,6 +95,7 @@ class InspectionWorkflowService {
     InspectionRecord inspection, {
     List<String> recipients = const <String>[],
   }) async {
+    _assertReadyForHandoff(inspection);
     final pdfResult = await generatePdf(inspection);
     final record = pdfResult.inspection;
     final handoff = await _emailService.handoffPdf(
@@ -107,12 +108,18 @@ class InspectionWorkflowService {
         customer: record.customer,
       ),
     );
-    final emailed = await _repository.markEmailed(record);
     return InspectionEmailWorkflowResult(
-      inspection: emailed.clone(),
+      inspection: record.clone(),
       pdfFile: pdfResult.pdfFile,
       handoffResult: handoff,
     );
+  }
+
+  Future<InspectionRecord> confirmInspectionEmailed(
+    InspectionRecord inspection,
+  ) async {
+    _assertReadyForHandoff(inspection);
+    return (await _repository.markEmailed(inspection.clone())).clone();
   }
 
   Future<InspectionCompletionWorkflowResult> completeInspection(
@@ -124,7 +131,10 @@ class InspectionWorkflowService {
         'Inspection has ${validation.issues.length} completion blocker(s).',
       );
     }
-    final saved = await _repository.saveInspection(inspection.clone());
+    final completed = inspection.clone()
+      ..completedAt = DateTime.now()
+      ..emailedAt = null;
+    final saved = await _repository.saveInspection(completed);
     return InspectionCompletionWorkflowResult(inspection: saved.clone());
   }
 
@@ -173,5 +183,14 @@ class InspectionWorkflowService {
               ? null
               : File(record.generatedPdfPath!)),
     );
+  }
+
+  void _assertReadyForHandoff(InspectionRecord inspection) {
+    final validation = InspectionValidator.validateForCompletion(inspection);
+    if (!validation.isValid || inspection.completedAt == null) {
+      throw StateError(
+        'Complete and validate the inspection before sharing the customer report.',
+      );
+    }
   }
 }

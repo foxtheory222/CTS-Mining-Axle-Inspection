@@ -73,8 +73,8 @@ jobs:
               adb wait-for-device
               flutter test --no-pub "$1" -d emulator-5554
             }
-            run_integration integration_test/app_flow_test.dart
-            run_integration integration_test/real_app_matrix_test.dart
+            run_integration integration_test/app_flow_test.dart || exit 1
+            run_integration integration_test/real_app_matrix_test.dart || exit 1
 
       - name: Upload coverage
         if: always()

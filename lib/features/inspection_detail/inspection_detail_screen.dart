@@ -55,8 +55,39 @@ class InspectionDetailScreen extends ConsumerWidget {
       final result = await ref
           .read(inspectionWorkflowServiceProvider)
           .shareInspectionPdf(record);
+      if (!context.mounted) {
+        return 'Share handoff opened.';
+      }
+      final confirmedSent = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: const Icon(Icons.mark_email_read_outlined),
+          title: const Text('Confirm report sent'),
+          content: const Text(
+            'Only mark this inspection emailed after the report was successfully sent from the device share screen.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Not sent yet'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.check_rounded),
+              label: const Text('Mark emailed'),
+            ),
+          ],
+        ),
+      );
+      if (confirmedSent == true) {
+        await ref
+            .read(inspectionWorkflowServiceProvider)
+            .confirmInspectionEmailed(result.inspection);
+        await controller.refresh();
+        return 'Report confirmed sent and marked as emailed.';
+      }
       await controller.refresh();
-      return 'Share handoff opened with ${result.pdfFile.path}';
+      return 'Share handoff closed. Status remains Complete until sent is confirmed.';
     }
 
     Future<void> showPdfReadyDialog(File pdfFile) {
@@ -219,11 +250,12 @@ class _DetailHeader extends StatelessWidget {
           spacing: 10,
           runSpacing: 10,
           children: [
-            StatusBadge.forInspection(inspection.status),
+            StatusBadge.forInspection(inspection.status, onDarkSurface: true),
             StatusBadge(
               label: inspection.documentNumber,
               color: CtsPalette.orangeSoft,
               icon: Icons.confirmation_number_outlined,
+              onDarkSurface: true,
             ),
           ],
         ),
@@ -634,6 +666,7 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final foreground = accessibleTintForeground(context, color);
     return Container(
       width: 160,
       padding: const EdgeInsets.all(16),
@@ -648,7 +681,7 @@ class _SummaryCard extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: color,
+              color: foreground,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -694,8 +727,8 @@ class _SideSummary extends StatelessWidget {
           const SizedBox(height: 12),
           _ActionButton(
             icon: Icons.email_outlined,
-            title: 'Email handoff',
-            subtitle: 'Open the device mail or share flow.',
+            title: 'Share customer report',
+            subtitle: 'Share first, then confirm only after it was sent.',
             onTap: onEmailHandoff,
           ),
           const SizedBox(height: 12),

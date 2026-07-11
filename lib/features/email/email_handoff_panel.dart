@@ -85,6 +85,7 @@ class EmailHandoffPanel extends StatelessWidget {
                         : '${recipient.customer} • used ${recipient.usageCount} time(s)',
                   ),
                   trailing: IconButton(
+                    tooltip: 'Add ${recipient.email}',
                     onPressed: onRecipientSelected == null
                         ? null
                         : () => onRecipientSelected!(recipient.email),

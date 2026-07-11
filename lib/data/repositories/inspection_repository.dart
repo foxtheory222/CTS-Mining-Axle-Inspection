@@ -83,6 +83,12 @@ class InspectionRepository {
   Future<InspectionRecord> saveInspection(InspectionRecord inspection) async {
     final Database db = await _database.open();
     final InspectionRecord? existing = await getInspection(inspection.id);
+    if (existing != null &&
+        inspection.documentNumber != existing.documentNumber) {
+      throw StateError(
+        'Document number ${existing.documentNumber} is permanent and cannot be changed.',
+      );
+    }
     final DateTime now = DateTime.now();
     inspection.updatedAt = now;
     final bool editedAfterEmail =
@@ -95,11 +101,8 @@ class InspectionRepository {
     _refreshSectionStates(inspection);
     final ValidationResult validation =
         InspectionValidator.validateForCompletion(inspection);
-    if (inspection.emailedAt == null &&
-        validation.isValid &&
-        (inspection.signatureFilePath ?? '').trim().isNotEmpty) {
-      inspection.completedAt ??= now;
-    } else if (inspection.emailedAt == null) {
+    if (!validation.isValid) {
+      inspection.emailedAt = null;
       inspection.completedAt = null;
     }
     inspection.status = InspectionValidator.deriveStatus(inspection);
@@ -153,8 +156,13 @@ class InspectionRepository {
   }
 
   Future<InspectionRecord> markEmailed(InspectionRecord inspection) async {
+    final validation = InspectionValidator.validateForCompletion(inspection);
+    if (!validation.isValid || inspection.completedAt == null) {
+      throw StateError(
+        'Only a completed, valid inspection can be marked as emailed.',
+      );
+    }
     inspection.emailedAt = DateTime.now();
-    inspection.completedAt ??= inspection.emailedAt;
     inspection.status = InspectionStatus.emailed;
     return saveInspection(inspection);
   }

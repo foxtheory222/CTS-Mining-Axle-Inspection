@@ -29,7 +29,7 @@ class RequiredFieldLabel extends StatelessWidget {
           child: Text(
             'Required',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: CtsPalette.orange,
+              color: accessibleTintForeground(context, CtsPalette.orange),
               fontWeight: FontWeight.w800,
             ),
           ),

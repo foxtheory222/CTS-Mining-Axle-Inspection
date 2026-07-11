@@ -205,11 +205,12 @@ class JsonFileRecipientStore implements RecipientStore {
       );
     } else {
       final current = recipients[index];
+      final normalizedCustomer = customer?.trim();
       recipients[index] = RecentEmailRecipient(
         email: current.email,
-        customer: customer?.trim().isEmpty ?? current.customer == null
+        customer: normalizedCustomer == null || normalizedCustomer.isEmpty
             ? current.customer
-            : customer!.trim(),
+            : normalizedCustomer,
         lastUsedAt: now,
         usageCount: current.usageCount + 1,
       );

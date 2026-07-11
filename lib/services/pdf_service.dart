@@ -23,13 +23,27 @@ class PdfService {
     InspectionReportData data, {
     bool includeLogoAsset = true,
   }) async {
+    final regularFont = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/PublicSans-Regular.ttf'),
+    );
+    final semiboldFont = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/PublicSans-SemiBold.ttf'),
+    );
+    final boldFont = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/PublicSans-Bold.ttf'),
+    );
     final document = pw.Document(
       title: reportTitle,
       author: 'Combined Technical Services',
       subject: reportTitle,
       keywords: 'Combined Technical Services, mining, axle, inspection, report',
       compress: compress,
-      theme: pw.ThemeData.withFont(),
+      theme: pw.ThemeData.withFont(
+        base: regularFont,
+        bold: boldFont,
+        italic: regularFont,
+        boldItalic: semiboldFont,
+      ),
     );
 
     final resolvedLogo = includeLogoAsset

@@ -139,6 +139,84 @@ void main() {
       throwsA(isA<PhotoServiceException>()),
     );
   });
+
+  test('production photo path enforces the per-item limit', () async {
+    final tempDir = await Directory.systemTemp.createTemp(
+      'photo_service_production_limit_',
+    );
+    addTearDown(() async {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    final cameraFile = await _writeTestImage(tempDir.path, 'camera.jpg');
+    final service = PhotoService(
+      photoPicker: FakeInspectionPhotoPicker(
+        cameraPhoto: XFile(cameraFile.path),
+      ),
+      documentsDirectoryProvider: () async => tempDir,
+      maxPhotosPerItem: 1,
+    );
+
+    await expectLater(
+      service.addPhoto(
+        inspectionId: 'inspection-1',
+        sectionKey: 'section',
+        itemKey: 'item',
+        source: PhotoInputSource.camera,
+        sortOrder: 1,
+        currentPhotoCount: 1,
+      ),
+      throwsA(isA<PhotoServiceException>()),
+    );
+  });
+
+  test(
+    'unsupported photo bytes are rejected and never saved as JPEG',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'photo_service_invalid_image_',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      final invalidFile = File(p.join(tempDir.path, 'unsupported.bin'));
+      await invalidFile.writeAsBytes(<int>[0, 1, 2, 3, 4, 5]);
+      final service = PhotoService(
+        photoPicker: FakeInspectionPhotoPicker(
+          cameraPhoto: XFile(invalidFile.path),
+        ),
+        documentsDirectoryProvider: () async => tempDir,
+      );
+
+      await expectLater(
+        service.captureFromCamera(
+          inspectionId: 'inspection-1',
+          sectionKey: 'section',
+          itemKey: 'item',
+          currentPhotoCount: 0,
+        ),
+        throwsA(
+          isA<PhotoServiceException>().having(
+            (error) => error.code,
+            'code',
+            PhotoServiceErrorCode.invalidAsset,
+          ),
+        ),
+      );
+      final persistedJpegs = await tempDir
+          .list(recursive: true)
+          .where(
+            (entity) => entity is File && p.extension(entity.path) == '.jpg',
+          )
+          .toList();
+      expect(persistedJpegs, isEmpty);
+    },
+  );
 }
 
 Future<File> _writeTestImage(String directory, String fileName) async {

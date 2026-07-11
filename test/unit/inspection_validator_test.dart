@@ -44,6 +44,29 @@ void main() {
     );
   });
 
+  test('every fixed checklist row requires an explicit valid selection', () {
+    final inspection = _completeMiningInspection();
+    _removeResponse(inspection, 'axle_housing');
+    _upsert(
+      inspection,
+      MiningAxleTemplate.visualInspection,
+      'oil_leaks',
+      'Oil Leaks',
+      '',
+    );
+
+    final result = InspectionValidator.validateForCompletion(inspection);
+
+    expect(result.isValid, isFalse);
+    expect(
+      result.issues.map((issue) => issue.message),
+      containsAll(<String>[
+        'Axle Housing selection is required.',
+        'Oil Leaks selection is required.',
+      ]),
+    );
+  });
+
   test('oil sampling taken requires sample number', () {
     final inspection = _completeMiningInspection();
     _upsert(

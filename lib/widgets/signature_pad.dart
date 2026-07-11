@@ -56,21 +56,33 @@ class SignaturePad extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        Row(
-          children: [
-            OutlinedButton.icon(
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final clearButton = OutlinedButton.icon(
               onPressed: onClear,
               icon: const Icon(Icons.clear),
               label: const Text('Clear signature'),
-            ),
-            const SizedBox(width: 12),
-            Text(
+            );
+            final guidance = Text(
               'Draw the signature with a stylus or finger.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-            ),
-          ],
+            );
+            if (constraints.maxWidth < 620) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [clearButton, const SizedBox(height: 8), guidance],
+              );
+            }
+            return Row(
+              children: [
+                clearButton,
+                const SizedBox(width: 12),
+                Expanded(child: guidance),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -78,13 +90,22 @@ class SignaturePad extends StatelessWidget {
 }
 
 class StatusChip extends StatelessWidget {
-  const StatusChip({super.key, required this.text, required this.color});
+  const StatusChip({
+    super.key,
+    required this.text,
+    required this.color,
+    this.onDarkSurface = false,
+  });
 
   final String text;
   final Color color;
+  final bool onDarkSurface;
 
   @override
   Widget build(BuildContext context) {
+    final foreground = onDarkSurface
+        ? color
+        : accessibleTintForeground(context, color);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -94,7 +115,7 @@ class StatusChip extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: color,
+          color: foreground,
           fontWeight: FontWeight.w800,
         ),
       ),

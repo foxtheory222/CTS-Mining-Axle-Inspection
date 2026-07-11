@@ -214,6 +214,71 @@ void main() {
   });
 
   test(
+    'saving a valid signed draft does not complete it without confirmation',
+    () async {
+      final inspection = buildInspection(
+        id: 'valid-draft',
+        documentNumber: '20260420-0005',
+        status: InspectionStatus.inProgress,
+      );
+      fillRequiredResponses(inspection);
+      inspection.signatureFilePath = '/tmp/signature.png';
+
+      final saved = await repository.saveInspection(inspection);
+
+      expect(saved.status, InspectionStatus.inProgress);
+      expect(saved.completedAt, isNull);
+    },
+  );
+
+  test('an incomplete inspection cannot be marked as emailed', () async {
+    final inspection = await repository.createInspection(
+      createdAt: DateTime.utc(2026, 4, 20, 14),
+    );
+
+    await expectLater(
+      repository.markEmailed(inspection),
+      throwsA(isA<StateError>()),
+    );
+
+    final persisted = await repository.getInspection(inspection.id);
+    expect(persisted?.emailedAt, isNull);
+    expect(persisted?.status, InspectionStatus.draft);
+  });
+
+  test('a saved inspection document number cannot be changed', () async {
+    final inspection = await repository.createInspection(
+      createdAt: DateTime.utc(2026, 4, 20, 15),
+    );
+    final originalDocumentNumber = inspection.documentNumber;
+    inspection.documentNumber = '20260420-9999';
+
+    await expectLater(
+      repository.saveInspection(inspection),
+      throwsA(isA<StateError>()),
+    );
+
+    final persisted = await repository.getInspection(inspection.id);
+    expect(persisted?.documentNumber, originalDocumentNumber);
+  });
+
+  test('invalid imported emailed state is downgraded safely', () async {
+    final inspection = buildInspection(
+      id: 'invalid-imported-email',
+      documentNumber: '20260420-0006',
+      status: InspectionStatus.emailed,
+      completedAt: DateTime.utc(2026, 4, 20, 15),
+      emailedAt: DateTime.utc(2026, 4, 20, 16),
+    );
+
+    final saved = await repository.saveInspection(inspection);
+
+    expect(saved.emailedAt, isNull);
+    expect(saved.completedAt, isNull);
+    expect(saved.status, InspectionStatus.inProgress);
+  });
+
+  test(
     'search finds inspections by work order, customer, asset, document, and technician',
     () async {
       final inspection = buildInspection(

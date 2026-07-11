@@ -45,6 +45,15 @@ void main() {
       expect(_editableTextWithValue('AXLE-1001'), findsNothing);
       expect(find.byType(Image), findsNothing);
       expect(find.widgetWithText(FilledButton, 'Save Draft'), findsWidgets);
+
+      final axleHousing = tester.widget<DropdownButtonFormField<String>>(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is DropdownButtonFormField<String> &&
+              widget.decoration.labelText == 'Axle Housing *',
+        ),
+      );
+      expect(axleHousing.initialValue, isNull);
     },
   );
 
@@ -93,7 +102,7 @@ void main() {
     final oilLeaksDropdown = find.byWidgetPredicate(
       (widget) =>
           widget is DropdownButtonFormField<String> &&
-          widget.decoration.labelText == 'Oil Leaks',
+          widget.decoration.labelText == 'Oil Leaks *',
       description: 'Oil Leaks dropdown',
     );
     await tester.ensureVisible(oilLeaksDropdown);
@@ -103,11 +112,93 @@ void main() {
     await tester.tap(find.text('Yes').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('Evidence required'), findsOneWidget);
+    expect(find.text('Comment, photo & action required'), findsOneWidget);
     expect(
       find.byKey(const Key('add_evidence_photo_oil_leaks')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('an adverse row can be marked Critical / Out of Service', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1600, 1000));
+    addTearDown(() async => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: InspectionFormScreen(initialRecord: _blankInspection()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final oilLeaksDropdown = find.byWidgetPredicate(
+      (widget) =>
+          widget is DropdownButtonFormField<String> &&
+          widget.decoration.labelText == 'Oil Leaks *',
+    );
+    await tester.ensureVisible(oilLeaksDropdown);
+    await tester.tap(oilLeaksDropdown);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Yes').last);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const Key('critical_toggle_oil_leaks')));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final criticalChip = tester.widget<FilterChip>(
+      find.byKey(const Key('critical_toggle_oil_leaks')),
+    );
+    expect(criticalChip.selected, isTrue);
+    expect(
+      find.text('Critical / Out of Service acknowledgement'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('draft save failures are shown without crashing the form', (
+    tester,
+  ) async {
+    final tempDir = Directory.systemTemp.createTempSync(
+      'inspection_form_save_failure_',
+    );
+    final database = TestAppDatabase(tempDir);
+    final repository = InspectionRepository(
+      database: database,
+      documentNumberService: DocumentNumberService(),
+    );
+    final workspace = _FailingWorkspaceController(repository: repository);
+    addTearDown(() async {
+      await database.close();
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
+      }
+    });
+    await tester.binding.setSurfaceSize(const Size(1600, 1000));
+    addTearDown(() async => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [workspaceProvider.overrideWith((ref) => workspace)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: InspectionFormScreen(initialRecord: _blankInspection()),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Save Draft').first);
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      find.textContaining('Unable to save this inspection'),
+      findsOneWidget,
+    );
+    expect(find.text('New Mining Axle Inspection'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('row comments and table inputs persist after save and reload', (
@@ -337,6 +428,20 @@ class _TrackingWorkspaceController extends AppWorkspaceController {
   @override
   Future<InspectionRecord?> inspectionRecordById(String id) async {
     return null;
+  }
+}
+
+class _FailingWorkspaceController extends AppWorkspaceController {
+  _FailingWorkspaceController({required super.repository});
+
+  @override
+  Future<void> refresh() async {}
+
+  @override
+  Future<InspectionSummary> saveInspectionRecord(
+    InspectionRecord inspection,
+  ) async {
+    throw StateError('Injected storage failure.');
   }
 }
 

@@ -123,7 +123,7 @@ void main() {
   });
 
   test(
-    'email handoff shares the generated PDF and marks emailed on success',
+    'email handoff shares the PDF and waits for sent confirmation',
     () async {
       final inspection = await _savedCompleteInspection(repository, tempDir);
 
@@ -135,6 +135,16 @@ void main() {
       expect(result.handoffResult.attachmentPath, result.pdfFile.path);
       expect(shareAdapter.lastSharedPdf?.path, result.pdfFile.path);
       expect(await File(result.handoffResult.attachmentPath).exists(), isTrue);
+
+      final handedOff = await repository.getInspection(inspection.id);
+      expect(handedOff?.status, InspectionStatus.complete);
+      expect(handedOff?.emailedAt, isNull);
+
+      final confirmed = await workflow.confirmInspectionEmailed(
+        result.inspection,
+      );
+      expect(confirmed.status, InspectionStatus.emailed);
+      expect(confirmed.emailedAt, isNotNull);
 
       final persisted = await repository.getInspection(inspection.id);
       expect(persisted?.status, InspectionStatus.emailed);
@@ -278,6 +288,7 @@ Future<InspectionRecord> _savedCompleteInspection(
   bool includePhoto = false,
 }) async {
   final inspection = _completeInspection(tempDir);
+  inspection.completedAt = DateTime.utc(2026, 7, 1, 11);
   if (includePhoto) {
     final photo = await _copyAsset(
       tempDir,

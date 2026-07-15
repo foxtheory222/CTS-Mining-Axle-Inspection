@@ -143,12 +143,7 @@ jobs:
           emulator-options: >-
             -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -memory 2048
             -no-boot-anim -camera-back none
-          script: |
-            base_apk="$RUNNER_TEMP/CTS-Mining-Axle-Inspection-v1.1.0.apk"
-            curl --fail --location --silent --show-error \
-              https://github.com/foxtheory222/CTS-Mining-Axle-Inspection/releases/download/v1.1.0/CTS-Mining-Axle-Inspection-v1.1.0.apk \
-              --output "$base_apk"
-            CTS_SMOKE_BASE_APK="$base_apk" tool/smoke_release_apk.sh
+          script: tool/smoke_ci_release_apk.sh
 
       - name: Build debug APK
         run: flutter build apk --debug

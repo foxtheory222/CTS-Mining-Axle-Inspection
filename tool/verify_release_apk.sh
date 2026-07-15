@@ -44,11 +44,25 @@ if [[ "${SKIP_SIGNER_CHECK:-0}" != "1" ]]; then
   fi
 
   expected_signer_sha256="${EXPECTED_SIGNER_SHA256:-dc43296456fcc7d11f07a80477d844a43034fc262f4da3bdca281108a679f762}"
-  signer_output="$("$apksigner_bin" verify --print-certs "$apk_path")"
-  actual_signer_sha256="$(
-    sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"$signer_output" \
-      | tr '[:upper:]' '[:lower:]'
+  signer_output="$(
+    "$apksigner_bin" verify --print-certs-pem "$apk_path" 2>&1
   )"
+  certificate_pem="$(
+    awk '
+      /-----BEGIN CERTIFICATE-----/ { capture = 1 }
+      capture { print }
+      /-----END CERTIFICATE-----/ { exit }
+    ' <<<"$signer_output"
+  )"
+  actual_signer_sha256=""
+  if [[ -n "$certificate_pem" ]]; then
+    actual_signer_sha256="$(
+      openssl x509 -noout -fingerprint -sha256 <<<"$certificate_pem" \
+        | sed 's/.*=//' \
+        | tr -d ':' \
+        | tr '[:upper:]' '[:lower:]'
+    )"
+  fi
   if [[ "$actual_signer_sha256" != "$expected_signer_sha256" ]]; then
     echo "Release APK signer does not match installed CTS Axle builds." >&2
     echo "Expected: $expected_signer_sha256" >&2

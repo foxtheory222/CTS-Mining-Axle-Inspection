@@ -7,6 +7,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:cts_mining_axle_inspection/app.dart';
 import 'package:cts_mining_axle_inspection/core/workspace_providers.dart';
+import 'package:cts_mining_axle_inspection/features/inspection_form/inspection_form_screen.dart';
 
 import 'support/persistence_test_helpers.dart';
 
@@ -75,6 +76,60 @@ void main() {
     expect(find.text('Inspection Records'), findsOneWidget);
   });
 
+  testWidgets(
+    'dashboard creates a draft and reselecting New preserves unsaved work',
+    (WidgetTester tester) async {
+      final scope = await _testAppScope();
+      addTearDown(() => _disposeScope(tester, scope));
+      await tester.binding.setSurfaceSize(const Size(1600, 1000));
+      addTearDown(() async => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(scope.wrap(const CtsMiningAxleInspectionApp()));
+      await tester.pumpAndSettle();
+      await _pumpUntil(
+        tester,
+        () =>
+            find.byKey(const Key('storage_loading_banner')).evaluate().isEmpty,
+      );
+
+      expect(find.byKey(const Key('storage_error_banner')), findsNothing);
+      await tester.tap(find.widgetWithText(FilledButton, 'New Inspection'));
+      await tester.pump();
+      await _pumpUntil(
+        tester,
+        () => find.text('New Mining Axle Inspection').evaluate().isNotEmpty,
+      );
+
+      expect(find.text('New Mining Axle Inspection'), findsOneWidget);
+      expect(find.byKey(const Key('inspection_load_failure')), findsNothing);
+      final database = await tester.runAsync(scope.database.open);
+      final firstFormState = tester.state(find.byType(InspectionFormScreen));
+      expect(
+        await tester.runAsync(
+          () => database!.rawQuery('SELECT id FROM inspections'),
+        ),
+        hasLength(1),
+      );
+      await tester.enterText(find.byType(TextField).first, 'Unsaved Mine');
+
+      tester
+          .widget<NavigationRail>(find.byType(NavigationRail))
+          .onDestinationSelected!(2);
+      await tester.pump();
+
+      expect(find.text('New Mining Axle Inspection'), findsOneWidget);
+      expect(find.byKey(const Key('inspection_load_failure')), findsNothing);
+      expect(tester.state(find.byType(InspectionFormScreen)), firstFormState);
+      expect(find.text('Unsaved Mine'), findsOneWidget);
+      final rows = (await tester.runAsync(
+        () => database!.rawQuery(
+          'SELECT id, document_number FROM inspections '
+          'ORDER BY document_number',
+        ),
+      ))!;
+      expect(rows, hasLength(1));
+    },
+  );
+
   testWidgets('settings exposes template and backup controls', (
     WidgetTester tester,
   ) async {
@@ -119,6 +174,19 @@ Future<_TestAppScope> _testAppScope() async {
   final tempDir = Directory.systemTemp.createTempSync('app_widget_test_');
   final database = TestAppDatabase(tempDir);
   return _TestAppScope(tempDir, database);
+}
+
+Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
+  for (var attempt = 0; attempt < 50; attempt += 1) {
+    if (condition()) {
+      return;
+    }
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+  fail('Condition was not met within 5 seconds.');
 }
 
 Future<void> _disposeScope(WidgetTester tester, _TestAppScope scope) async {

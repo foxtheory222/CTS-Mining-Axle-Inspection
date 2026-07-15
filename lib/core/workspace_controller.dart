@@ -13,7 +13,7 @@ import 'workspace_models.dart';
 class AppWorkspaceController extends ChangeNotifier {
   AppWorkspaceController({required InspectionRepository repository})
     : _repository = repository {
-    Timer.run(() {
+    _initialRefreshTimer = Timer(Duration.zero, () {
       if (!_disposed) {
         unawaited(refresh());
       }
@@ -21,6 +21,7 @@ class AppWorkspaceController extends ChangeNotifier {
   }
 
   final InspectionRepository _repository;
+  Timer? _initialRefreshTimer;
   final List<InspectionSummary> _inspections = <InspectionSummary>[];
   final Map<String, InspectionRecord> _recordsById =
       <String, InspectionRecord>{};
@@ -372,6 +373,8 @@ class AppWorkspaceController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _initialRefreshTimer?.cancel();
+    _initialRefreshTimer = null;
     super.dispose();
   }
 }

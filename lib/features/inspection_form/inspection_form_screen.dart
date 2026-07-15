@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:signature/signature.dart';
 
 import '../../core/constants.dart';
@@ -73,6 +74,7 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
   final List<InspectionPhotoView> _photos = <InspectionPhotoView>[];
 
   InspectionRecord? _record;
+  Object? _loadError;
   bool _loadingRecord = true;
   bool _saving = false;
   bool _thermographyPerformed = false;
@@ -185,7 +187,12 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_record == null) {
-      return const Center(child: Text('Inspection record was not found.'));
+      return _InspectionLoadFailure(
+        isNewInspection: widget.inspectionId == null,
+        loadFailed: _loadError != null,
+        onRetry: _retryLoad,
+        onReturnToDashboard: () => context.go('/'),
+      );
     }
 
     final issues = _visibleIssueMessages();
@@ -1055,6 +1062,7 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       }
       setState(() {
         _record = record;
+        _loadError = null;
         if (record != null) {
           _applyRecord(record);
         }
@@ -1064,11 +1072,22 @@ class _InspectionFormScreenState extends ConsumerState<InspectionFormScreen> {
       if (!mounted) {
         return;
       }
-      setState(() => _loadingRecord = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to open inspection: $error')),
-      );
+      setState(() {
+        _loadError = error;
+        _loadingRecord = false;
+      });
     }
+  }
+
+  void _retryLoad() {
+    if (_loadingRecord) {
+      return;
+    }
+    setState(() {
+      _loadError = null;
+      _loadingRecord = true;
+    });
+    unawaited(_loadRecord());
   }
 
   void _applyRecord(InspectionRecord record) {
@@ -2130,6 +2149,104 @@ class _Banner extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _InspectionLoadFailure extends StatelessWidget {
+  const _InspectionLoadFailure({
+    required this.isNewInspection,
+    required this.loadFailed,
+    required this.onRetry,
+    required this.onReturnToDashboard,
+  });
+
+  final bool isNewInspection;
+  final bool loadFailed;
+  final VoidCallback onRetry;
+  final VoidCallback onReturnToDashboard;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = loadFailed
+        ? isNewInspection
+              ? 'Unable to start a new inspection'
+              : 'Unable to open this inspection'
+        : 'Inspection not found';
+    final message = loadFailed
+        ? 'Local inspection storage could not be opened. The inspection '
+              'editor is safely paused; retry to continue.'
+        : 'This inspection may have been removed or restored under a '
+              'different document number.';
+    return Center(
+      child: Semantics(
+        liveRegion: true,
+        label: '$title. $message',
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620),
+          child: Card(
+            key: const Key('inspection_load_failure'),
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: CtsPalette.danger.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Icon(
+                      Icons.storage_rounded,
+                      size: 34,
+                      color: CtsPalette.danger,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      if (loadFailed)
+                        FilledButton.icon(
+                          key: const Key('retry_inspection_load_button'),
+                          onPressed: onRetry,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Retry'),
+                        ),
+                      OutlinedButton.icon(
+                        onPressed: onReturnToDashboard,
+                        icon: const Icon(Icons.dashboard_outlined),
+                        label: const Text('Return to Dashboard'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme.dart';
+import '../../core/new_inspection_navigation.dart';
 import '../../core/workspace_models.dart';
 import '../../core/workspace_providers.dart';
 import '../../widgets/section_card.dart';
@@ -16,12 +17,23 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.watch(workspaceProvider);
     final metrics = controller.dashboardMetrics;
+    final canStartInspection =
+        !controller.isLoading && controller.lastError == null;
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (controller.isLoading) ...[
+            const _StorageStateBanner.loading(),
+            const SizedBox(height: 12),
+          ] else if (controller.lastError != null) ...[
+            _StorageStateBanner.error(onRetry: () => controller.refresh()),
+            const SizedBox(height: 12),
+          ],
           _HeroBanner(
-            onNewInspection: () => context.go('/inspection/new'),
+            onNewInspection: canStartInspection
+                ? () => startNewInspection(context)
+                : null,
             onOpenInspections: () => context.go('/inspections'),
             onOpenActions: () => context.go('/actions'),
           ),
@@ -68,7 +80,11 @@ class DashboardScreen extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(width: 18),
-                        const Expanded(child: _QuickActionsPanel()),
+                        Expanded(
+                          child: _QuickActionsPanel(
+                            canStartInspection: canStartInspection,
+                          ),
+                        ),
                       ],
                     )
                   : Column(
@@ -77,12 +93,88 @@ class DashboardScreen extends ConsumerWidget {
                           inspections: controller.recentInspections,
                         ),
                         const SizedBox(height: 18),
-                        const _QuickActionsPanel(),
+                        _QuickActionsPanel(
+                          canStartInspection: canStartInspection,
+                        ),
                       ],
                     );
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _StorageStateBanner extends StatelessWidget {
+  const _StorageStateBanner.loading() : isLoading = true, onRetry = null;
+
+  const _StorageStateBanner.error({required this.onRetry}) : isLoading = false;
+
+  final bool isLoading;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = isLoading ? CtsPalette.info : CtsPalette.danger;
+    return Semantics(
+      liveRegion: true,
+      label: isLoading
+          ? 'Preparing local inspection storage'
+          : 'Local inspection storage is unavailable',
+      child: Container(
+        key: Key(isLoading ? 'storage_loading_banner' : 'storage_error_banner'),
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.45)),
+        ),
+        child: Row(
+          children: [
+            if (isLoading)
+              const Icon(Icons.sync_rounded, color: CtsPalette.info)
+            else
+              const Icon(Icons.storage_rounded, color: CtsPalette.danger),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isLoading
+                        ? 'Preparing local inspection storage'
+                        : 'Local inspection storage is unavailable',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: isLoading ? scheme.onSurface : CtsPalette.danger,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    isLoading
+                        ? 'New inspection actions will be ready in a moment.'
+                        : 'No data was changed. Retry before starting an inspection.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onRetry != null) ...[
+              const SizedBox(width: 12),
+              FilledButton.tonalIcon(
+                key: const Key('retry_storage_button'),
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Retry'),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -95,7 +187,7 @@ class _HeroBanner extends StatelessWidget {
     required this.onOpenActions,
   });
 
-  final VoidCallback onNewInspection;
+  final VoidCallback? onNewInspection;
   final VoidCallback onOpenInspections;
   final VoidCallback onOpenActions;
 
@@ -589,7 +681,9 @@ class _MiniStat extends StatelessWidget {
 }
 
 class _QuickActionsPanel extends StatelessWidget {
-  const _QuickActionsPanel();
+  const _QuickActionsPanel({required this.canStartInspection});
+
+  final bool canStartInspection;
 
   @override
   Widget build(BuildContext context) {
@@ -601,8 +695,12 @@ class _QuickActionsPanel extends StatelessWidget {
           _ActionButton(
             icon: Icons.add_circle_outline,
             title: 'Start new inspection',
-            subtitle: 'Open the full inspection editor.',
-            onTap: () => context.go('/inspection/new'),
+            subtitle: canStartInspection
+                ? 'Open the full inspection editor.'
+                : 'Waiting for local inspection storage.',
+            onTap: canStartInspection
+                ? () => startNewInspection(context)
+                : null,
           ),
           const SizedBox(height: 12),
           _ActionButton(
@@ -635,7 +733,7 @@ class _ActionButton extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

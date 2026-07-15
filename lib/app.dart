@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/constants.dart';
+import 'core/new_inspection_navigation.dart';
 import 'core/theme.dart';
 import 'features/action_items/action_items_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
@@ -29,7 +30,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   context.go('/inspections');
                   break;
                 case 2:
-                  context.go('/inspection/new');
+                  startNewInspection(context);
                   break;
                 case 3:
                   context.go('/actions');

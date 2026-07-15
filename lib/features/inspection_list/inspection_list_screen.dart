@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme.dart';
+import '../../core/new_inspection_navigation.dart';
 import '../../core/workspace_models.dart';
 import '../../core/workspace_providers.dart';
 import '../../data/models/inspection_enums.dart';
@@ -330,7 +331,7 @@ class _SummaryPanel extends StatelessWidget {
           const Divider(),
           const SizedBox(height: 10),
           FilledButton.icon(
-            onPressed: () => context.go('/inspection/new'),
+            onPressed: () => startNewInspection(context),
             icon: const Icon(Icons.add),
             label: const Text('New Inspection'),
           ),

@@ -70,7 +70,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
 
     final addPhotoButton = find.widgetWithText(FilledButton, 'Add first photo');
     await tester.ensureVisible(addPhotoButton.first);
@@ -198,6 +198,63 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('New Mining Axle Inspection'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('new-record load failures show a persistent retry state', (
+    tester,
+  ) async {
+    final tempDir = Directory.systemTemp.createTempSync(
+      'inspection_form_load_failure_',
+    );
+    final database = TestAppDatabase(tempDir);
+    final repository = InspectionRepository(
+      database: database,
+      documentNumberService: DocumentNumberService(),
+    );
+    final workspace = _FailingCreateWorkspaceController(repository: repository);
+    await tester.pump(const Duration(milliseconds: 1));
+    addTearDown(() async {
+      await database.close();
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
+      }
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [workspaceProvider.overrideWith((ref) => workspace)],
+        child: const MaterialApp(home: Scaffold(body: InspectionFormScreen())),
+      ),
+    );
+    await tester.pump();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    expect(find.byKey(const Key('inspection_load_failure')), findsOneWidget);
+    expect(find.text('Unable to start a new inspection'), findsOneWidget);
+    expect(
+      find.textContaining('The inspection editor is safely paused'),
+      findsOneWidget,
+    );
+    expect(workspace.createAttempts, 1);
+    expect(
+      find.byKey(const Key('retry_inspection_load_button')),
+      findsOneWidget,
+    );
+    expect(find.text('Inspection record was not found.'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('retry_inspection_load_button')));
+    await tester.pump();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    expect(find.text('Unable to start a new inspection'), findsOneWidget);
+    expect(workspace.createAttempts, 2);
     expect(tester.takeException(), isNull);
   });
 
@@ -442,6 +499,21 @@ class _FailingWorkspaceController extends AppWorkspaceController {
     InspectionRecord inspection,
   ) async {
     throw StateError('Injected storage failure.');
+  }
+}
+
+class _FailingCreateWorkspaceController extends AppWorkspaceController {
+  _FailingCreateWorkspaceController({required super.repository});
+
+  int createAttempts = 0;
+
+  @override
+  Future<void> refresh() async {}
+
+  @override
+  Future<InspectionRecord> createInspectionRecord({DateTime? createdAt}) {
+    createAttempts += 1;
+    throw StateError('Injected database initialization failure.');
   }
 }
 

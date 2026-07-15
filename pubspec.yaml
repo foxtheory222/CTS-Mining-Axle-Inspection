@@ -1,7 +1,7 @@
 name: cts_mining_axle_inspection
 description: Offline-first Android tablet inspection workflow for CTS Mining Axle inspections.
 publish_to: 'none'
-version: 1.1.0+2
+version: 1.1.1+3
 
 environment:
   sdk: ^3.10.4

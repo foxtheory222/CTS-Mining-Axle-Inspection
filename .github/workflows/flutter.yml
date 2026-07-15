@@ -3,6 +3,7 @@ name: Flutter CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -58,6 +59,7 @@ jobs:
           script: |
             flutter drive --no-dds --no-pub --dart-define=INTEGRATION_TEST_SHOULD_REPORT_RESULTS_TO_NATIVE=false --driver=test_driver/integration_test.dart --target=integration_test/app_flow_test.dart -d emulator-5554
             flutter drive --no-dds --no-pub --dart-define=INTEGRATION_TEST_SHOULD_REPORT_RESULTS_TO_NATIVE=false --driver=test_driver/integration_test.dart --target=integration_test/real_app_matrix_test.dart -d emulator-5554
+            flutter drive --no-dds --no-pub --dart-define=INTEGRATION_TEST_SHOULD_REPORT_RESULTS_TO_NATIVE=false --driver=test_driver/integration_test.dart --target=integration_test/legacy_database_upgrade_test.dart -d emulator-5554
 
       - name: Upload coverage
         if: always()
@@ -71,6 +73,8 @@ jobs:
     name: Lint and build APKs
     runs-on: ubuntu-latest
     needs: analyze-and-test
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -85,15 +89,66 @@ jobs:
           flutter-version: '3.41.7'
           cache: true
 
+      - name: Configure update-compatible release signing
+        env:
+          CTS_ANDROID_KEYSTORE_BASE64: ${{ secrets.CTS_ANDROID_KEYSTORE_BASE64 }}
+          CTS_ANDROID_STORE_PASSWORD_SECRET: ${{ secrets.CTS_ANDROID_STORE_PASSWORD }}
+          CTS_ANDROID_KEY_PASSWORD_SECRET: ${{ secrets.CTS_ANDROID_KEY_PASSWORD }}
+        run: |
+          if [[ -z "$CTS_ANDROID_KEYSTORE_BASE64" ]]; then
+            if [[ "$GITHUB_REF" == "refs/heads/main" || "$GITHUB_REF" == refs/tags/* ]]; then
+              echo "CTS release-signing secrets are required on main and release tags." >&2
+              exit 1
+            fi
+            echo "SKIP_SIGNER_CHECK=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          keystore="$RUNNER_TEMP/cts-mining-axle-release.keystore"
+          printf '%s' "$CTS_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          echo "CTS_ANDROID_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
+          echo "CTS_ANDROID_STORE_PASSWORD=$CTS_ANDROID_STORE_PASSWORD_SECRET" >> "$GITHUB_ENV"
+          echo "CTS_ANDROID_KEY_ALIAS=androiddebugkey" >> "$GITHUB_ENV"
+          echo "CTS_ANDROID_KEY_PASSWORD=$CTS_ANDROID_KEY_PASSWORD_SECRET" >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: flutter pub get
 
       - name: Build release APK
-        run: flutter build apk --release
+        run: |
+          flutter clean
+          flutter pub get
+          flutter build apk --release
+
+      - name: Verify release APK plugin registration
+        run: tool/verify_release_apk.sh
 
       - name: Android release lint
         working-directory: android
         run: ./gradlew lintRelease
+
+      - name: Enable KVM access
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Smoke-test exact release APK
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: >-
+            -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -memory 2048
+            -no-boot-anim -camera-back none
+          script: |
+            base_apk="$RUNNER_TEMP/CTS-Mining-Axle-Inspection-v1.1.0.apk"
+            curl --fail --location --silent --show-error \
+              https://github.com/foxtheory222/CTS-Mining-Axle-Inspection/releases/download/v1.1.0/CTS-Mining-Axle-Inspection-v1.1.0.apk \
+              --output "$base_apk"
+            CTS_SMOKE_BASE_APK="$base_apk" tool/smoke_release_apk.sh
 
       - name: Build debug APK
         run: flutter build apk --debug
@@ -101,8 +156,26 @@ jobs:
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: cts-mining-axle-apks
+          name: cts-mining-axle-verified-apks
           path: |
             build/app/outputs/flutter-apk/app-debug.apk
             build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+      - name: Publish the verified APK for a version tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version_name="$(awk '/^version:/ {split($2, value, "+"); print value[1]}' pubspec.yaml)"
+          test "v$version_name" = "$GITHUB_REF_NAME"
+          asset_name="CTS-Mining-Axle-Inspection-$GITHUB_REF_NAME.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "$asset_name"
+          sha256sum "$asset_name" > "$asset_name.sha256"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$asset_name" "$asset_name.sha256" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$asset_name" "$asset_name.sha256" \
+              --verify-tag --latest --generate-notes \
+              --title "CTS Mining Axle Inspection $GITHUB_REF_NAME"
+          fi
